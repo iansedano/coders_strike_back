@@ -1,5 +1,6 @@
 import sys
 import math
+import numpy as np
 
 laps = int(input())
 checkpoint_count = int(input())
@@ -13,7 +14,6 @@ for i in range(checkpoint_count):
 # print(f"test {ckpnts[1]['x']}", file=sys.stderr)
 
 counter = 0
-
 
 def pp_angle(a):
     new_a = a
@@ -184,14 +184,30 @@ while True:
         '''
             
 
-        if info['distance_to_target'] < 4000:
-            vector_overshoot = info['distance_to_target'] * math.tan(info['heading_offset'])
-            extension_of_pod_vector_length = math.hypot(info['distance_to_target'], vector_overshoot)
-            x_of_vector_overshoot = extension_of_pod_vector_length / math.cos(info['heading']) # Doesnt work because relative to pod
-            y_of_vector_overshoot = math.hypot(extension_of_pod_vector_length, x_of_vector_overshoot) # Doesnt work because relative to pod
+        if info['distance_to_target'] < 4000 and abs(info['heading_offset']) > 0.1 and abs(info['heading_offset']) < (pi/2):
+            vector_overshoot = abs(info['distance_to_target'] * math.tan(info['heading_offset']))
+            extension_of_pod_vector_length = math.hypot(info['distance_to_target'], vector_overshoot) # ERROR overshoot can become hypoteneuse!
+            x_of_vector_overshoot = (extension_of_pod_vector_length / math.cos(info['heading'])) # relative to pod
+            
+            if abs(x_of_vector_overshoot) > abs(extension_of_pod_vector_length):
+                y_of_vector_overshoot = (extension_of_pod_vector_length ** 2 + x_of_vector_overshoot ** 2) ** 0.5 # relative to pod
+            else:
+                y_of_vector_overshoot = (extension_of_pod_vector_length ** 2 - x_of_vector_overshoot ** 2) ** 0.5 # relative to pod
 
-            x_diff_overshoot_target = x_of_vector_overshoot - ckpnts[next_checkpoint_id]['x'] 
-            y_diff_overshoot_target = y_of_vector_overshoot - ckpnts[next_checkpoint_id]['y']
+            '''
+            print(f"""      distance_to_target {info['distance_to_target']}
+            vector_overshoot:{vector_overshoot}
+            extension_of_pod_vector_length {extension_of_pod_vector_length}
+            x_of_vector_overshoot {x_of_vector_overshoot}
+            y_of_vector_overshoot {y_of_vector_overshoot}
+            """, file=sys.stderr)
+            '''
+
+            abs_x_overshoot = x + x_of_vector_overshoot
+            abs_y_overshoot = y + y_of_vector_overshoot
+
+            x_diff_overshoot_target = abs_x_overshoot - ckpnts[next_checkpoint_id]['x'] 
+            y_diff_overshoot_target = abs_y_overshoot - ckpnts[next_checkpoint_id]['y']
 
             x_compensation = int(ckpnts[next_checkpoint_id]['x'] + y_diff_overshoot_target)
             y_compensation = int(ckpnts[next_checkpoint_id]['y'] - x_diff_overshoot_target)
