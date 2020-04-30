@@ -187,12 +187,9 @@ while True:
         if info['distance_to_target'] < 4000 and abs(info['heading_offset']) > 0.1 and abs(info['heading_offset']) < (pi/2):
             vector_overshoot = abs(info['distance_to_target'] * math.tan(info['heading_offset']))
             extension_of_pod_vector_length = math.hypot(info['distance_to_target'], vector_overshoot) # ERROR overshoot can become hypoteneuse!
-            x_of_vector_overshoot = (extension_of_pod_vector_length / math.cos(info['heading'])) # relative to pod
+            x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(info['heading'])) # relative to pod
+            y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(info['heading'])) # relative to pod
             
-            if abs(x_of_vector_overshoot) > abs(extension_of_pod_vector_length):
-                y_of_vector_overshoot = (extension_of_pod_vector_length ** 2 + x_of_vector_overshoot ** 2) ** 0.5 # relative to pod
-            else:
-                y_of_vector_overshoot = (extension_of_pod_vector_length ** 2 - x_of_vector_overshoot ** 2) ** 0.5 # relative to pod
 
             '''
             print(f"""      distance_to_target {info['distance_to_target']}
