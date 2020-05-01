@@ -48,23 +48,71 @@ def quad_from_vector(global_vx, global_vy):
     elif global_vx > 0 and global_vy < 0:
         return 4
 
+def get_checkpoint_info(checkpoint_id, pod):
+    pod['x'] = pod_x
+    pod['y'] = pod_y
 
-def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facing_in_rads):
+    x = ckpnts[checkpoint_id]['x']
+    y = ckpnts[checkpoint_id]['y']
+
+    # x and y from pod to checkpoint
+    pod_to_checkpoint_x = x - pod_x
+    pod_to_checkpoint_y = y - pod_y
+
+    # distance to checkpoint
+    distance_to_checkpoint = math.hypot(
+        pod_to_checkpoint_x,
+        pod_to_checkpoint_y)
+
+    print(f" distance_to_checkpoint {int(distance_to_checkpoint)}", file=sys.stderr)
+
+    checkpoint_quadrant = quad_from_pos(x, y, pod_x, pod_y)
+
+    x_to_checkpoint_from_pod = 0  # initalizing TODO deal with 0 values
+    y_to_checkpoint_from_pod = 0  # initalizing TODO deal with 0 values
+
+    if checkpoint_quadrant == 1:
+        x_to_checkpoint_from_pod = x - pod_x
+        y_to_checkpoint_from_pod = pod_y - y
+    elif checkpoint_quadrant == 2:
+        x_to_checkpoint_from_pod = (pod_x - x) * -1
+        y_to_checkpoint_from_pod = pod_y - y
+    elif checkpoint_quadrant == 3:
+        x_to_checkpoint_from_pod = (pod_x - x) * -1
+        y_to_checkpoint_from_pod = (y - pod_y) * -1
+    elif checkpoint_quadrant == 4:
+        x_to_checkpoint_from_pod = x - pod_x
+        y_to_checkpoint_from_pod = (y - pod_y) * -1
+
+
+    # getting the absolute angle of the checkpoint from the pods position
+    abs_angle_to_checkpoint = abs_angle_to_checkpoint = math.atan2(
+        y_to_checkpoint_from_pod, x_to_checkpoint_from_pod)
+
+    return{
+    'x':x,
+    'y':y,
+    'pod_to_checkpoint_x':pod_to_checkpoint_x,
+    'pod_to_checkpoint_y':pod_to_checkpoint_y,
+    'distance_to_checkpoint':distance_to_checkpoint,
+    'checkpoint_quadrant': checkpoint_quadrant,
+    'x_to_checkpoint_from_pod': x_to_checkpoint_from_pod,
+    'y_to_checkpoint_from_pod': y_to_checkpoint_from_pod,
+    'abs_angle_to_checkpoint': abs_angle_to_checkpoint,
+    }
+
+
+def get_info(pod):
 
     # Establishing target checkpoint
-    target_x = ckpnts[next_checkpoint_id]['x']
-    target_y = ckpnts[next_checkpoint_id]['y']
+    pod_x = pod['x']
+    pod_y = pod['y']
+    global_vx = pod['global_vx']
+    global_vy = pod['global_vy']
+    angle_facing_in_rads = pod['angle_facing']
+    next_checkpoint_id = pod['next_checkpoint_id']
 
-    # x and y from pod to target
-    x_global_translation_to_target = target_x - pod_x
-    y_global_translation_to_target = target_y - pod_y
-
-    # distance to target
-    distance_to_target = math.hypot(
-        x_global_translation_to_target,
-        y_global_translation_to_target)
-
-    print(f" distance_to_target {int(distance_to_target)}", file=sys.stderr)
+    next_checkpoint = get_checkpoint_info(next_checkpoint_id, pod)
 
     # translating global velocity as given to velocity relative to pod (0,0)
     pod_vx = global_vx
@@ -80,35 +128,6 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     abs_velocity = math.hypot(pod_vx, pod_vy)
     print(f" abs_velocity {int(abs_velocity)}", file=sys.stderr)
 
-    # getting the quadrant that the target is in relative to pod
-    target_quadrant = quad_from_pos(target_x, target_y, pod_x, pod_y)
-
-    # How far is the pod from the target in x and y
-    x_to_target_from_pod = 0  # initalizing TODO deal with 0 values
-    y_to_target_from_pod = 0  # initalizing TODO deal with 0 values
-
-    if target_quadrant == 1:
-        x_to_target_from_pod = target_x - pod_x
-        y_to_target_from_pod = pod_y - target_y
-    elif target_quadrant == 2:
-        x_to_target_from_pod = (pod_x - target_x) * -1
-        y_to_target_from_pod = pod_y - target_y
-    elif target_quadrant == 3:
-        x_to_target_from_pod = (pod_x - target_x) * -1
-        y_to_target_from_pod = (target_y - pod_y) * -1
-    elif target_quadrant == 4:
-        x_to_target_from_pod = target_x - pod_x
-        y_to_target_from_pod = (target_y - pod_y) * -1
-
-    # getting the absolute angle of the target from the pods position
-    abs_angle_to_target = abs_angle_to_target = math.atan2(
-        y_to_target_from_pod, x_to_target_from_pod)
-
-    #print(f" abs_angle_to_target {abs_angle_to_target}", file=sys.stderr)
-
-    # the difference between the facing angle and the angle of the target
-    # and the diff between the actual_heading_angle and the angle of the target
-    # if 0 values, then pod is actual_heading_angle straight for the target
     facing_offset = ((abs_angle_to_target - angle_facing_in_rads) + (pi/2)) % pi - (pi/2)
     heading_offset = ((abs_angle_to_target - actual_heading_angle) + (pi/2)) % pi - (pi/2)
 
@@ -116,63 +135,39 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     #print(f" heading_offset {heading_offset}", file=sys.stderr)
 
 
-    heading_x = target_x
-    heading_y = target_y
-
-
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # ++++++++++++++++++++COMPENSATION ANGLE+++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
 
-
     # how far the current heading will miss the target
     vector_overshoot = abs(distance_to_target * math.tan(abs(heading_offset)))
-    #print(f" vector overshoot {int(vector_overshoot)}", file=sys.stderr)
 
     # the distance between pod and the line crossing of the target
     extension_of_pod_vector_length = math.hypot(distance_to_target, vector_overshoot)
-    #print(f" extension_of_pod_vector_length {int(extension_of_pod_vector_length)}", file=sys.stderr)
 
     # coordinates of the overshoot
     x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(actual_heading_angle)) # relative to pod
     y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(actual_heading_angle)) # relative to pod
     
-    #print(f" x_of_vector_overshoot {int(x_of_vector_overshoot)}", file=sys.stderr)
-    #print(f" y_of_vector_overshoot {int(y_of_vector_overshoot)}", file=sys.stderr)
 
     #absolute values (constrained to max 2000)
     global_x_overshoot = (pod_x + x_of_vector_overshoot)
     global_y_overshoot = (pod_y - y_of_vector_overshoot)
 
-    #global_x_overshoot = constrain(global_x_overshoot, -2000, 2000)
-    #global_y_overshoot = constrain(global_x_overshoot, -2000, 2000)
-
-
-    #print(f" global_x_overshoot {int(global_x_overshoot)}", file=sys.stderr)
-    #print(f" global_y_overshoot {int(global_y_overshoot)}", file=sys.stderr)
-
     # distance between overshoot point and taget
     x_diff_overshoot_target = global_x_overshoot - target_x
     y_diff_overshoot_target = global_y_overshoot - target_y
 
-    #print(f" x_diff_overshoot_target {int(x_diff_overshoot_target)}", file=sys.stderr)
-    # print(f" y_diff_overshoot_target {int(y_diff_overshoot_target)}", file=sys.stderr)
-
+    # compensation values
     x_compensation = int(0 - x_diff_overshoot_target)
     y_compensation = int(0 - y_diff_overshoot_target)
-
-    #print(f" x_compensation {int(x_compensation)}", file=sys.stderr)
-    #print(f" y_compensation {int(y_compensation)}", file=sys.stderr)
-
-        
 
 
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # ++++++++++++++++++++CHECKPOINT TRACKING++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    
-
 
     
     # ++++++++++++++++ANGLE TO NEXT CHECKPOINT+++++++++++++++++++++
@@ -221,25 +216,15 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
         (distance_between_pod_and_following_checkpoint)
         )
 
-    #print(f"angle_target_pod_following {angle_target_pod_following}", file=sys.stderr)
-
     distance_between_pod_and_c = distance_to_target * math.cos(angle_target_pod_following)
-    #print(f"distance_between_pod_and_c {distance_between_pod_and_c}", file=sys.stderr)
 
     coeff_distance_pod_c_and_pod_target = distance_between_pod_and_c / distance_between_pod_and_following_checkpoint
-    #print(f"coeff_distance_pod_c_and_pod_target {coeff_distance_pod_c_and_pod_target}", file=sys.stderr)
 
     x_between_pod_and_c = x_between_pod_and_following_checkpoint * coeff_distance_pod_c_and_pod_target
     y_between_pod_and_c = y_between_pod_and_following_checkpoint * coeff_distance_pod_c_and_pod_target
 
-    #print(f"x_between_pod_and_c {x_between_pod_and_c}", file=sys.stderr)
-    #print(f"y_between_pod_and_c {y_between_pod_and_c}", file=sys.stderr)
-
     global_cx = pod_x + x_between_pod_and_c
     global_cy = pod_y + y_between_pod_and_c
-
-    #print(f"global_cx {global_cx}", file=sys.stderr)
-    #print(f"global_cy {global_cy}", file=sys.stderr)
 
     x_between_target_and_c = global_cx - target_x
     y_between_target_and_c = global_cy - target_y
@@ -297,7 +282,7 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     heading_x += int(comp_x_target_c)
     heading_y += int(comp_y_target_c)
 
-    if abs(heading_offset) > 0.05 and distance_between_pod_and_previous_checkpoint > 1500:
+    if abs(heading_offset) > 0.05:
         heading_x += x_compensation
         heading_y += y_compensation
 
@@ -305,7 +290,7 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
         time_to_target = distance_to_target / abs_velocity
         print(f"time_to_target {time_to_target}", file=sys.stderr)
 
-        if time_to_target < 4 and heading_offset < 0.1:
+        if time_to_target < 5 and heading_offset < 0.1:
             thrust = 20
             heading_x = following_checkpoint_x
             heading_y = following_checkpoint_y
@@ -344,10 +329,10 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
 
 
 pod = {
-    0:{'info':{}, },
-    1:{'info':{}, },
-    2:{'info':{}, },
-    3:{'info':{}, }
+    0:{},
+    1:{},
+    2:{},
+    3:{}
     }
 # game loop
 while True:
@@ -363,7 +348,14 @@ while True:
         angle_facing_in_rads = angle_facing * (pi / 180) 
         print(f" i:{i} next checkpoint {next_checkpoint_id} angle facing:{angle_facing_in_rads},  x:{x}  y:{y} global_vx:{global_vx}  global_vy:{global_vy}", file=sys.stderr)
 
-        info = get_info(next_checkpoint_id, x, y, global_vx, global_vy, angle_facing_in_rads)
+        pod[i]['x'] = x
+        pod[i]['y'] = y
+        pod[i]['global_vx'] = global_vx
+        pod[i]['global_vy'] = global_vy
+        pod[i]['angle_facing'] = angle_facing_in_rads
+        pod[i]['next_checkpoint_id'] = next_checkpoint_id
+
+        pod[i]['info'] = get_info(pod[i])
 
 
     #for i in range(2):
