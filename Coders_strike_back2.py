@@ -102,7 +102,7 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
 
     # getting the absolute angle of the target from the pods position
     abs_angle_to_target = abs_angle_to_target = math.atan2(
-            y_to_target_from_pod, x_to_target_from_pod)
+        y_to_target_from_pod, x_to_target_from_pod)
 
     #print(f" abs_angle_to_target {abs_angle_to_target}", file=sys.stderr)
 
@@ -159,8 +159,8 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     #print(f" x_diff_overshoot_target {int(x_diff_overshoot_target)}", file=sys.stderr)
     # print(f" y_diff_overshoot_target {int(y_diff_overshoot_target)}", file=sys.stderr)
 
-    x_compensation = int(target_x - x_diff_overshoot_target)
-    y_compensation = int(target_y - y_diff_overshoot_target)
+    x_compensation = int(0 - x_diff_overshoot_target)
+    y_compensation = int(0 - y_diff_overshoot_target)
 
     #print(f" x_compensation {int(x_compensation)}", file=sys.stderr)
     #print(f" y_compensation {int(y_compensation)}", file=sys.stderr)
@@ -247,10 +247,15 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     print(f"x_between_target_and_c {x_between_target_and_c}", file=sys.stderr)
     print(f"y_between_target_and_c {y_between_target_and_c}", file=sys.stderr)
 
-    
+    offset_from_target_center = 1100
 
+    coeff_for_corner = (offset_from_target_center ** 2) / (x_between_target_and_c ** 2 + y_between_target_and_c ** 2)
 
+    comp_x_target_c = x_between_target_and_c * coeff_for_corner
+    comp_y_target_c = y_between_target_and_c * coeff_for_corner
 
+    print(f"comp_x_target_c {comp_x_target_c}", file=sys.stderr)
+    print(f"comp_y_target_c {comp_y_target_c}", file=sys.stderr)
 
 
 
@@ -275,8 +280,12 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     # +++++++++++++++++++++HEADING ALGORITHM+++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    
+    heading_x = target_x
+    heading_y = target_y
+
+
     thrust = 100
+
     if abs(facing_offset) > 1.5:
         thrust = 20
     elif abs(facing_offset) > 0.7:
@@ -284,9 +293,13 @@ def get_info(next_checkpoint_id, pod_x, pod_y, global_vx, global_vy, angle_facin
     else:
         thrust = 100
 
+
+    heading_x += int(comp_x_target_c)
+    heading_y += int(comp_y_target_c)
+
     if abs(heading_offset) > 0.05 and distance_between_pod_and_previous_checkpoint > 1500:
-        heading_x = x_compensation
-        heading_y = y_compensation
+        heading_x += x_compensation
+        heading_y += y_compensation
 
     if abs_velocity > 0:
         time_to_target = distance_to_target / abs_velocity
