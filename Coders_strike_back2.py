@@ -49,20 +49,20 @@ def quad_from_vector(global_vx, global_vy):
         return 4
 
 def get_checkpoint_info(checkpoint_id, pod):
-    pod['x'] = pod_x
-    pod['y'] = pod_y
+    pod_x = pod['x']
+    pod_y = pod['y']
 
     x = ckpnts[checkpoint_id]['x']
     y = ckpnts[checkpoint_id]['y']
 
     # x and y from pod to checkpoint
-    pod_to_checkpoint_x = x - pod_x
-    pod_to_checkpoint_y = y - pod_y
+    global_pod_to_checkpoint_x = x - pod_x
+    global_pod_to_checkpoint_y = y - pod_y
 
     # distance to checkpoint
     distance_to_checkpoint = math.hypot(
-        pod_to_checkpoint_x,
-        pod_to_checkpoint_y)
+        global_pod_to_checkpoint_x,
+        global_pod_to_checkpoint_y)
 
     print(f" distance_to_checkpoint {int(distance_to_checkpoint)}", file=sys.stderr)
 
@@ -89,62 +89,32 @@ def get_checkpoint_info(checkpoint_id, pod):
     abs_angle_to_checkpoint = abs_angle_to_checkpoint = math.atan2(
         y_to_checkpoint_from_pod, x_to_checkpoint_from_pod)
 
+    facing_offset = ((abs_angle_to_checkpoint - pod['angle_facing']) + (pi/2)) % pi - (pi/2)
+    heading_offset = ((abs_angle_to_checkpoint - pod['actual_heading_angle']) + (pi/2)) % pi - (pi/2)
+
     return{
     'x':x,
     'y':y,
-    'pod_to_checkpoint_x':pod_to_checkpoint_x,
-    'pod_to_checkpoint_y':pod_to_checkpoint_y,
     'distance_to_checkpoint':distance_to_checkpoint,
-    'checkpoint_quadrant': checkpoint_quadrant,
     'x_to_checkpoint_from_pod': x_to_checkpoint_from_pod,
     'y_to_checkpoint_from_pod': y_to_checkpoint_from_pod,
     'abs_angle_to_checkpoint': abs_angle_to_checkpoint,
+    'facing_offset':facing_offset,
+    'heading_offset':heading_offset
     }
 
-
-def get_info(pod):
-
-    # Establishing target checkpoint
-    pod_x = pod['x']
+def add_compensation_angle_info(checkpoint_info_dict, pod):
+    pod_x = pod['x'] 
     pod_y = pod['y']
-    global_vx = pod['global_vx']
-    global_vy = pod['global_vy']
-    angle_facing_in_rads = pod['angle_facing']
-    next_checkpoint_id = pod['next_checkpoint_id']
-
-    next_checkpoint = get_checkpoint_info(next_checkpoint_id, pod)
-
-    # translating global velocity as given to velocity relative to pod (0,0)
-    pod_vx = global_vx
-    pod_vy = global_vy * -1
-
-    # getting the angle of the pods direction calculated from vector
-    actual_heading_angle = math.atan2(pod_vy, pod_vx) # TODO deal with zero values
-
-    # getting the quadrant the vector is facing
-    vector_quad = quad_from_vector(pod_vx, pod_vy)
-
-    # getting the absolute magnitude of pod vector
-    abs_velocity = math.hypot(pod_vx, pod_vy)
-    print(f" abs_velocity {int(abs_velocity)}", file=sys.stderr)
-
-    facing_offset = ((abs_angle_to_target - angle_facing_in_rads) + (pi/2)) % pi - (pi/2)
-    heading_offset = ((abs_angle_to_target - actual_heading_angle) + (pi/2)) % pi - (pi/2)
-
-    #print(f" facing_offset {facing_offset}", file=sys.stderr)
-    #print(f" heading_offset {heading_offset}", file=sys.stderr)
-
-
-    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    # ++++++++++++++++++++COMPENSATION ANGLE+++++++++++++++++++++++
-    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    
+    heading_offset = checkpoint_info_dict['heading_offset']
+    distance_to_checkpoint = checkpoint_info_dict['distance_to_checkpoint']
+    actual_heading_angle = pod['actual_heading_angle']
 
     # how far the current heading will miss the target
-    vector_overshoot = abs(distance_to_target * math.tan(abs(heading_offset)))
+    vector_overshoot = abs(distance_to_checkpoint * math.tan(abs(heading_offset)))
 
     # the distance between pod and the line crossing of the target
-    extension_of_pod_vector_length = math.hypot(distance_to_target, vector_overshoot)
+    extension_of_pod_vector_length = math.hypot(distance_to_checkpoint, vector_overshoot)
 
     # coordinates of the overshoot
     x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(actual_heading_angle)) # relative to pod
@@ -156,37 +126,28 @@ def get_info(pod):
     global_y_overshoot = (pod_y - y_of_vector_overshoot)
 
     # distance between overshoot point and taget
-    x_diff_overshoot_target = global_x_overshoot - target_x
-    y_diff_overshoot_target = global_y_overshoot - target_y
+    x_diff_overshoot_target = global_x_overshoot - checkpoint_info_dict['x']
+    y_diff_overshoot_target = global_y_overshoot - checkpoint_info_dict['y']
 
     # compensation values
-    x_compensation = int(0 - x_diff_overshoot_target)
-    y_compensation = int(0 - y_diff_overshoot_target)
+    checkpoint_info_dict['x_compensation'] = int(0 - x_diff_overshoot_target)
+    checkpoint_info_dict['y_compensation'] = int(0 - y_diff_overshoot_target)
 
 
-    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    # ++++++++++++++++++++CHECKPOINT TRACKING++++++++++++++++++++++
-    # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   
+def get_corner_cut(next_checkpoint, following_checkpoint, pod):
 
-    
-    # ++++++++++++++++ANGLE TO NEXT CHECKPOINT+++++++++++++++++++++
+    following_checkpoint_x = following_checkpoint['x'] 
+    following_checkpoint_y = following_checkpoint['y']
 
-    following_checkpoint_id = (next_checkpoint_id + 1) % (checkpoint_count)
-    # print(f"following checkpoint id {(next_checkpoint_id + 1) % (checkpoint_count)}", file=sys.stderr)
+    x_between_target_and_following_checkpoint = next_checkpoint['x'] - following_checkpoint_x
+    y_between_target_and_following_checkpoint = next_checkpoint['y'] - following_checkpoint_y
 
-    following_checkpoint_x = ckpnts[following_checkpoint_id]['x']
-    following_checkpoint_y = ckpnts[following_checkpoint_id]['y']
-
-    x_between_target_and_following_checkpoint = target_x - following_checkpoint_x
-    y_between_target_and_following_checkpoint = target_y - following_checkpoint_y
-
-    distance_between_target_and_following_checkpoint = math.hypot(x_between_target_and_following_checkpoint,y_between_target_and_following_checkpoint)
+    distance_between_target_and_following_checkpoint = math.hypot(x_between_target_and_following_checkpoint, y_between_target_and_following_checkpoint)
 
     # print(f"distance_between_target_and_following_checkpoint {distance_between_target_and_following_checkpoint}", file=sys.stderr)
 
-    x_between_pod_and_following_checkpoint = following_checkpoint_x - pod_x
-    y_between_pod_and_following_checkpoint = following_checkpoint_y - pod_y
+    x_between_pod_and_following_checkpoint = following_checkpoint_x - pod['x'] 
+    y_between_pod_and_following_checkpoint = following_checkpoint_y - pod['y']
 
     distance_between_pod_and_following_checkpoint = math.hypot(x_between_pod_and_following_checkpoint, y_between_pod_and_following_checkpoint)
 
@@ -195,10 +156,10 @@ def get_info(pod):
     angle_pod_target_following_checkpoint = math.acos(
             (
                 distance_between_pod_and_following_checkpoint ** 2 -
-                distance_to_target ** 2 -
+                next_checkpoint['distance_to_checkpoint'] ** 2 -
                 distance_between_target_and_following_checkpoint **2
             ) / (
-                -2 * distance_to_target * distance_between_target_and_following_checkpoint
+                -2 * next_checkpoint['distance_to_checkpoint'] * distance_between_target_and_following_checkpoint
             )
         )
 
@@ -216,18 +177,18 @@ def get_info(pod):
         (distance_between_pod_and_following_checkpoint)
         )
 
-    distance_between_pod_and_c = distance_to_target * math.cos(angle_target_pod_following)
+    distance_between_pod_and_c = next_checkpoint['distance_to_checkpoint'] * math.cos(angle_target_pod_following)
 
     coeff_distance_pod_c_and_pod_target = distance_between_pod_and_c / distance_between_pod_and_following_checkpoint
 
     x_between_pod_and_c = x_between_pod_and_following_checkpoint * coeff_distance_pod_c_and_pod_target
     y_between_pod_and_c = y_between_pod_and_following_checkpoint * coeff_distance_pod_c_and_pod_target
 
-    global_cx = pod_x + x_between_pod_and_c
-    global_cy = pod_y + y_between_pod_and_c
+    global_cx = pod['x'] + x_between_pod_and_c
+    global_cy = pod['y'] + y_between_pod_and_c
 
-    x_between_target_and_c = global_cx - target_x
-    y_between_target_and_c = global_cy - target_y
+    x_between_target_and_c = global_cx - next_checkpoint['x']
+    y_between_target_and_c = global_cy - next_checkpoint['y']
 
     print(f"x_between_target_and_c {x_between_target_and_c}", file=sys.stderr)
     print(f"y_between_target_and_c {y_between_target_and_c}", file=sys.stderr)
@@ -239,13 +200,56 @@ def get_info(pod):
     comp_x_target_c = x_between_target_and_c * coeff_for_corner
     comp_y_target_c = y_between_target_and_c * coeff_for_corner
 
+    return {'x': comp_x_target_c,'y': comp_y_target_c}
+
     print(f"comp_x_target_c {comp_x_target_c}", file=sys.stderr)
     print(f"comp_y_target_c {comp_y_target_c}", file=sys.stderr)
 
 
+def get_info(pod):
 
-    # print(f"angle_pod_target_following_checkpoint {angle_pod_target_following_checkpoint}", file=sys.stderr)
+    # Establishing target checkpoint
+    pod_x = pod['x']
+    pod_y = pod['y']
+    global_vx = pod['global_vx']
+    global_vy = pod['global_vy']
+    angle_facing_in_rads = pod['angle_facing']
+    next_checkpoint_id = pod['next_checkpoint_id']
 
+    # translating global velocity as given to velocity relative to pod (0,0)
+    pod['vx'] = pod_vx =  global_vx
+    pod['vy'] = pod_vy =  global_vy * -1
+
+    # getting the angle of the pods direction calculated from vector
+    pod['actual_heading_angle'] = actual_heading_angle = math.atan2(pod_vy, pod_vx) # TODO deal with zero values
+
+    # getting the quadrant the vector is facing
+    pod['vector_quad'] = vector_quad = quad_from_vector(pod_vx, pod_vy)
+
+    # getting the absolute magnitude of pod vector
+    pod['abs_velocity'] = abs_velocity = math.hypot(pod_vx, pod_vy)
+
+    print(f" abs_velocity {int(abs_velocity)}", file=sys.stderr)
+
+    next_checkpoint = get_checkpoint_info(next_checkpoint_id, pod)
+
+    facing_offset = ((next_checkpoint['abs_angle_to_checkpoint'] - angle_facing_in_rads) + (pi/2)) % pi - (pi/2)
+    heading_offset = ((next_checkpoint['abs_angle_to_checkpoint'] - actual_heading_angle) + (pi/2)) % pi - (pi/2)
+    
+    add_compensation_angle_info(next_checkpoint, pod)
+
+
+    # ++++++++++++++++ANGLE TO NEXT CHECKPOINT+++++++++++++++++++++
+
+    following_checkpoint_id = (next_checkpoint_id + 1) % (checkpoint_count)
+    # print(f"following checkpoint id {(next_checkpoint_id + 1) % (checkpoint_count)}", file=sys.stderr)
+
+    following_checkpoint = get_checkpoint_info(following_checkpoint_id, pod)
+
+    corner_cut = get_corner_cut(next_checkpoint, following_checkpoint, pod)
+
+    corner_cut_x = corner_cut['x']
+    corner_cut_y = corner_cut['y']
 
     # +++++++++++++DISTANCE FROM PREVIOUS CHECKPOINT+++++++++++++++
 
@@ -265,9 +269,8 @@ def get_info(pod):
     # +++++++++++++++++++++HEADING ALGORITHM+++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    heading_x = target_x
-    heading_y = target_y
-
+    heading_x = next_checkpoint['x']
+    heading_y = next_checkpoint['y']
 
     thrust = 100
 
@@ -279,53 +282,25 @@ def get_info(pod):
         thrust = 100
 
 
-    heading_x += int(comp_x_target_c)
-    heading_y += int(comp_y_target_c)
+    heading_x += int(corner_cut_x)
+    heading_y += int(corner_cut_y)
 
     if abs(heading_offset) > 0.05:
-        heading_x += x_compensation
-        heading_y += y_compensation
+        heading_x += next_checkpoint['x_compensation']
+        heading_y += next_checkpoint['y_compensation']
 
     if abs_velocity > 0:
-        time_to_target = distance_to_target / abs_velocity
+        time_to_target = next_checkpoint['distance_to_checkpoint'] / abs_velocity
         print(f"time_to_target {time_to_target}", file=sys.stderr)
 
         if time_to_target < 5 and heading_offset < 0.1:
             thrust = 20
-            heading_x = following_checkpoint_x
-            heading_y = following_checkpoint_y
+            heading_x = following_checkpoint['x']
+            heading_y = following_checkpoint['y']
 
-
-
-    return {
-    #'x_global_translation_to_target':x_global_translation_to_target,
-    #'y_global_translation_to_target':y_global_translation_to_target,
-    # 'abs_angle_to_target':abs_angle_to_target,
-    # 'target_x':target_x,
-    # 'target_y':target_y,
-    # 'pod_vx':pod_vx,
-    # 'pod_vy':pod_vy,
-    # 'x_to_target_from_pod':x_to_target_from_pod,
-    # 'y_to_target_from_pod':y_to_target_from_pod,
-     'distance_to_target':distance_to_target,
-    # 'target_quadrant':target_quadrant,
-    # 'vector_quad':vector_quad,
-    # 'abs_velocity':abs_velocity,
-    # 'actual_heading_angle':actual_heading_angle,
-     'facing_offset':facing_offset,
-    # 'heading_offset':heading_offset,
-    # 'vector_overshoot':vector_overshoot,
-    # 'extension_of_pod_vector_length':extension_of_pod_vector_length,
-    # 'x_of_vector_overshoot':x_of_vector_overshoot,
-    # 'y_of_vector_overshoot':y_of_vector_overshoot,
-    # 'x_diff_overshoot_target':x_diff_overshoot_target,
-    # 'y_diff_overshoot_target':y_diff_overshoot_target,
-    # 'x_compensation':x_compensation,
-    # 'y_compensation':y_compensation,
-    'heading_x':heading_x,
-    'heading_y':heading_y,
-    'thrust':thrust
-    }
+    pod['heading_x'] = heading_x
+    pod['heading_y'] = heading_y
+    pod['thrust'] = thrust
 
 
 pod = {
@@ -334,7 +309,16 @@ pod = {
     2:{},
     3:{}
     }
-# game loop
+
+
+    
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++GAME LOOP++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 while True:
     counter += 1
     #for i in range(2):
@@ -355,8 +339,8 @@ while True:
         pod[i]['angle_facing'] = angle_facing_in_rads
         pod[i]['next_checkpoint_id'] = next_checkpoint_id
 
-        pod[i]['info'] = get_info(pod[i])
-
+        get_info(pod[i])
+        print(f"{pod[i]}", file=sys.stderr)
 
     #for i in range(2):
     for i in range(3):
@@ -364,7 +348,7 @@ while True:
         x_2, y_2, global_vx_2, global_vy_2, angle_2, next_check_point_id_2 = [
             int(j) for j in input().split()]
      
-    print(f"{info['heading_x']} {info['heading_y']} {info['thrust']}")
+    print(f"{pod[0]['heading_x']} {pod[0]['heading_y']} {pod[0]['thrust']}")
     #print(f"{pod[0]['target_x']} {pod[0]['target_y']} 100")
     print("5000 5000 0")
     #print(str(heading_x) + " " + str(heading_y) + " " + str(thrust))
