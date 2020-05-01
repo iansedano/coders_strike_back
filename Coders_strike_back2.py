@@ -99,6 +99,7 @@ def get_checkpoint_info(checkpoint_id, pod):
     'x_to_checkpoint_from_pod': x_to_checkpoint_from_pod,
     'y_to_checkpoint_from_pod': y_to_checkpoint_from_pod,
     'abs_angle_to_checkpoint': abs_angle_to_checkpoint,
+    'checkpoint_quadrant':checkpoint_quadrant,
     'facing_offset':facing_offset,
     'heading_offset':heading_offset
     }
@@ -113,30 +114,58 @@ def add_compensation_angle_info(checkpoint_info_dict, pod):
     # how far the current heading will miss the target
     vector_overshoot = abs(distance_to_checkpoint * math.tan(abs(heading_offset)))
     print(f"vector_overshoot {vector_overshoot}", file=sys.stderr)
-
+    '''
+    if vector_overshoot > 5000:
+        checkpoint_info_dict['x_compensation'] = 0
+        checkpoint_info_dict['y_compensation'] = 0
+    else:
+    '''
     # the distance between pod and the line crossing of the target
     extension_of_pod_vector_length = math.hypot(distance_to_checkpoint, vector_overshoot)
 
     print(f"extension_of_pod_vector_length {extension_of_pod_vector_length}", file=sys.stderr)
 
-    # coordinates of the overshoot
-    x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(actual_heading_angle)) # relative to pod
-    y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(actual_heading_angle)) # relative to pod
 
-    print(f"x_of_vector_overshoot {x_of_vector_overshoot}", file=sys.stderr)
-    print(f"y_of_vector_overshoot {y_of_vector_overshoot}", file=sys.stderr)
+    # getting coordinates of overshoot
+
+    x_of_vector_overshoot = 0
+    y_of_vector_overshoot = 0
+
+
+    x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(actual_heading_angle))
+    y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(actual_heading_angle))
     
-    limit_compensation = 3000
+    '''
+    quadrant = checkpoint_info_dict['checkpoint_quadrant']
 
-    if vector_overshoot > limit_compensation:
-        limiting_coeff = limit_compensation ** 2 / (x_of_vector_overshoot ** 2 + y_of_vector_overshoot ** 2)
-        print(f"limiting_coeff {limiting_coeff}", file=sys.stderr)
-        x_of_vector_overshoot *= limiting_coeff
-        y_of_vector_overshoot *= limiting_coeff
+    if quadrant == 1:
+        x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(abs(actual_heading_angle)))
+        y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(abs(actual_heading_angle)))
+    elif quadrant == 2:
+        x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(pi - abs(actual_heading_angle))) * -1
+        y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(pi - abs(actual_heading_angle)))
+    elif quadrant == 3:
+        x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(pi - abs(actual_heading_angle))) * -1
+        y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(pi - abs(actual_heading_angle))) * -1
+    elif quadrant == 4:
+        x_of_vector_overshoot = (extension_of_pod_vector_length * math.cos(abs(actual_heading_angle)))
+        y_of_vector_overshoot = (extension_of_pod_vector_length * math.sin(abs(actual_heading_angle))) * -1
+    '''
 
     #absolute values (constrained to max 2000)
     global_x_overshoot = (pod_x + x_of_vector_overshoot)
     global_y_overshoot = (pod_y - y_of_vector_overshoot)
+
+    '''
+    limit_compensation = 3000
+
+    if vector_overshoot > limit_compensation:
+        limiting_coeff = limit_compensation ** 2 / (global_x_overshoot ** 2 + global_y_overshoot ** 2)
+        print(f"limiting_coeff {limiting_coeff}", file=sys.stderr)
+        global_x_overshoot *= limiting_coeff
+        global_y_overshoot *= limiting_coeff
+    '''
+    
 
     # distance between overshoot point and taget
     x_diff_overshoot_target = global_x_overshoot - checkpoint_info_dict['x']
@@ -308,9 +337,9 @@ def get_info(pod):
 
         if time_to_target < 5 and heading_offset < 0.1:
             thrust = 20
-            add_compensation_angle_info(following_checkpoint, pod)
-            heading_x = following_checkpoint['x_compensation']
-            heading_y = following_checkpoint['y_compensation']
+            #add_compensation_angle_info(following_checkpoint, pod)
+            heading_x = following_checkpoint['x']
+            heading_y = following_checkpoint['y']
 
     pod['heading_x'] = heading_x
     pod['heading_y'] = heading_y
@@ -335,8 +364,7 @@ pod = {
 
 while True:
     counter += 1
-    #for i in range(2):
-    for i in range(1):
+    for i in range(2):
 
         x, y, global_vx, global_vy, angle_facing, next_checkpoint_id = [
             int(j) for j in input().split()]
@@ -356,14 +384,13 @@ while True:
         get_info(pod[i])
         print(f"{pod[i]}", file=sys.stderr)
 
-    #for i in range(2):
-    for i in range(3):
+    for i in range(2):
         #OPPONENT
         x_2, y_2, global_vx_2, global_vy_2, angle_2, next_check_point_id_2 = [
             int(j) for j in input().split()]
      
     print(f"{pod[0]['heading_x']} {pod[0]['heading_y']} {pod[0]['thrust']}")
     #print(f"{pod[0]['target_x']} {pod[0]['target_y']} 100")
-    print("5000 5000 0")
+    print(f"{pod[1]['heading_x']} {pod[1]['heading_y']} {pod[1]['thrust']}")
     #print(str(heading_x) + " " + str(heading_y) + " " + str(thrust))
     #print(str(heading_x2) + " " + str(heading_y2) + " " + str(thrust2))
