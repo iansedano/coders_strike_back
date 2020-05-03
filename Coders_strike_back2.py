@@ -1,3 +1,5 @@
+# for possible implementation of genetic algo http://files.magusgeek.com/csb/csb_en.html
+
 import sys
 import math
 import numpy as np
