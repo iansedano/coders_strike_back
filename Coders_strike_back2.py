@@ -6,7 +6,7 @@ Currently standing in at around 960th place in gold league.
 cp = cp
 rel = relation
 agl = angle
-d = distance
+d = d
 
 
 """
@@ -67,16 +67,19 @@ def get_cp_rel_info(cp, pod):
 
     cp_rel = {}
 
-    # x and y from pod to cp
-    cp_rel['global_x_to_cp'] = cp['x'] - pod['x']
-    cp_rel['global_y_to_cp'] = cp['y'] - pod['y']
+    cp_rel['x'] = cp['x']
+    cp_rel['y'] = cp['y']
 
-    # distance to cp
+    # x and y from pod to cp
+    cp_rel['global_x_to_cp'] = cp_rel['x'] - pod['x']
+    cp_rel['global_y_to_cp'] = cp_rel['y'] - pod['y']
+
+    # d to cp
     cp_rel['d'] = math.hypot(
         cp_rel['global_x_to_cp'],
         cp_rel['global_y_to_cp'])
 
-    # print(f"distance_to_cp {int(distance_to_cp)}",
+    # print(f"d_to_cp {int(d_to_cp)}",
     #       file=sys.stderr)
 
     cp_rel['quadrant'] = quad_from_pos(cp['x'], cp['y'], pod['x'], pod['y'])
@@ -87,13 +90,13 @@ def get_cp_rel_info(cp, pod):
     if cp_rel['quadrant'] == 1:
         cp_rel['x_to_cp'] = cp['x'] - pod['x']
         cp_rel['y_to_cp'] = pod['y'] - cp['y']
-    elif cp_quadrant == 2:
+    elif cp_rel['quadrant'] == 2:
         cp_rel['x_to_cp'] = (pod['x'] - cp['x']) * -1
         cp_rel['y_to_cp'] = pod['y'] - cp['y']
-    elif cp_quadrant == 3:
+    elif cp_rel['quadrant'] == 3:
         cp_rel['x_to_cp'] = (pod['x'] - cp['x']) * -1
         cp_rel['y_to_cp'] = (cp['y'] - pod['y']) * -1
-    elif cp_quadrant == 4:
+    elif cp_rel['quadrant'] == 4:
         cp_rel['x_to_cp'] = cp['x'] - pod['x']
         cp_rel['y_to_cp'] = (cp['y'] - pod['y']) * -1
 
@@ -115,7 +118,7 @@ def add_compensation_angle_info(cp_rel, pod):
     """
     Add compensation turning angle to the cp dictionary.
 
-    With the distance to cp, and the current vector
+    With the d to cp, and the current vector
     heading offset, i.e. if the heading offset was 0, then
     the pod vector would be on perfect collision course with
     the target. Assuming that function is called when heading
@@ -138,12 +141,12 @@ def add_compensation_angle_info(cp_rel, pod):
     )
     print(f"overshoot_d {cp_rel['overshoot_d']}", file=sys.stderr)
 
-    # the distance between pod and the overshoot point.
+    # the d between pod and the overshoot point.
     cp_rel['projection_pod_vector_d'] = math.hypot(
         cp_rel['d'], cp_rel['overshoot_d']
     )
 
-    print(f"projection_pod_vector_d {projection_pod_vector_d}",
+    print(f"projection_pod_vector_d {cp_rel['projection_pod_vector_d']}",
           file=sys.stderr)
 
     # coordinates of overshoot relative to pod
@@ -157,16 +160,16 @@ def add_compensation_angle_info(cp_rel, pod):
     cp_rel['global_x_overshoot'] = (pod['x'] + cp_rel['x_overshoot'])
     cp_rel['global_y_overshoot'] = (pod['y'] - cp_rel['y_overshoot'])
 
-    # distance between overshoot point and taget
-    global_x_cp_overshoot = (global_x_overshoot - cp_rel['x'])
-    global_y_cp_overshoot = (global_y_overshoot - cp_rel['y'])
+    # d between overshoot point and taget
+    global_x_cp_overshoot = (cp_rel['global_x_overshoot'] - cp_rel['x'])
+    global_y_cp_overshoot = (cp_rel['global_y_overshoot'] - cp_rel['y'])
 
     # compensation values (point opposite target from overshoot)
     cp_rel['x_compensation'] = int(-global_x_cp_overshoot)
     cp_rel['y_compensation'] = int(-global_y_cp_overshoot)
 
 
-def get_corner_cut(next_cp, following_cp, pod):
+def get_corner_cut(next_cp_rel, following_cp_rel, pod):
     """
     Calculate where to aim to cut corner without missing target.
 
@@ -177,37 +180,37 @@ def get_corner_cut(next_cp, following_cp, pod):
     """
 
     x_between_next_and_following_cp = (
-        next_cp['x'] - following_cp['x'])
+        next_cp_rel['x'] - following_cp_rel['x'])
     y_between_next_and_following_cp = (
-        next_cp['y'] - following_cp['y'])
+        next_cp_rel['y'] - following_cp_rel['y'])
 
-    distance_between_next_and_following_cp = math.hypot(
+    d_between_next_and_following_cp = math.hypot(
         x_between_next_and_following_cp,
         y_between_next_and_following_cp
     )
 
-    # print(f"distance_between_target_and_following_cp",
-    # "{distance_between_target_and_following_cp}", file=sys.stderr)
+    # print(f"d_between_target_and_following_cp",
+    # "{d_between_target_and_following_cp}", file=sys.stderr)
 
-    x_between_pod_and_following_cp = following_cp['x'] - pod['x']
-    y_between_pod_and_following_cp = following_cp['y'] - pod['y']
+    x_between_pod_and_following_cp = following_cp_rel['x'] - pod['x']
+    y_between_pod_and_following_cp = following_cp_rel['y'] - pod['y']
 
-    distance_between_pod_and_following_cp = math.hypot(
+    d_between_pod_and_following_cp = math.hypot(
         x_between_pod_and_following_cp,
         y_between_pod_and_following_cp)
 
-    # print(f"distance_between_pod_and_following_cp",
-    # f"{distance_between_pod_and_following_cp}", file=sys.stderr)
+    # print(f"d_between_pod_and_following_cp",
+    # f"{d_between_pod_and_following_cp}", file=sys.stderr)
 
     # law of cosines
     angle_pod_next_following = math.acos(
         (
-            distance_between_pod_and_following_cp ** 2 -
-            next_cp['distance_to_cp'] ** 2 -
-            distance_between_next_and_following_cp ** 2
+            d_between_pod_and_following_cp ** 2 -
+            next_cp_rel['d'] ** 2 -
+            d_between_next_and_following_cp ** 2
         ) / (
-            -2 * next_cp['distance_to_cp'] *
-            distance_between_next_and_following_cp
+            -2 * next_cp_rel['d'] *
+            d_between_next_and_following_cp
         )
     )
 
@@ -221,35 +224,35 @@ def get_corner_cut(next_cp, following_cp, pod):
     # I will call 'c'
 
     angle_next_pod_following = math.asin(
-        (distance_between_next_and_following_cp *
+        (d_between_next_and_following_cp *
          math.sin(angle_pod_next_following)) /
-        (distance_between_pod_and_following_cp)
+        (d_between_pod_and_following_cp)
     )
 
-    distance_between_pod_and_c = (
-        next_cp['distance_to_cp'] *
+    d_between_pod_and_c = (
+        next_cp_rel['d'] *
         math.cos(angle_next_pod_following)
     )
 
-    coeff_distance_pod_c_and_pod_next = (
-        distance_between_pod_and_c /
-        distance_between_pod_and_following_cp
+    coeff_d_pod_c_and_pod_next = (
+        d_between_pod_and_c /
+        d_between_pod_and_following_cp
     )
 
     x_between_pod_and_c = (
         x_between_pod_and_following_cp *
-        coeff_distance_pod_c_and_pod_next
+        coeff_d_pod_c_and_pod_next
     )
     y_between_pod_and_c = (
         y_between_pod_and_following_cp *
-        coeff_distance_pod_c_and_pod_next
+        coeff_d_pod_c_and_pod_next
     )
 
     global_cx = pod['x'] + x_between_pod_and_c
     global_cy = pod['y'] + y_between_pod_and_c
 
-    x_between_next_and_c = global_cx - next_cp['x']
-    y_between_next_and_c = global_cy - next_cp['y']
+    x_between_next_and_c = global_cx - next_cp_rel['x']
+    y_between_next_and_c = global_cy - next_cp_rel['y']
 
     # print(f"x_between_next_and_c {x_between_next_and_c}",
     # file=sys.stderr)
@@ -289,8 +292,8 @@ def get_info(pod):
     pod['vy'] = pod['global_vy'] * -1
 
     # getting the angle of the pods direction calculated from vector
-    pod['actual_heading_angle'] = actual_heading_angle = (
-        math.atan2(pod_vy, pod_vx)
+    pod['actual_heading_angle'] = (
+        math.atan2(pod['vy'], pod['vx'])
     )  # TODO deal with zero values
 
     # getting the quadrant the vector is facing
@@ -299,46 +302,47 @@ def get_info(pod):
     # getting the absolute magnitude of pod vector
     pod['abs_velocity'] = math.hypot(pod['vx'], pod['vy'])
 
-    print(f" abs_velocity {int(abs_velocity)}", file=sys.stderr)
+    print(f" abs_velocity {int(pod['abs_velocity'])}", file=sys.stderr)
 
     pod['next_cp_rel'] = get_cp_rel_info(pod['next_cp'], pod)
 
     facing_offset = (
-        (
-            (next_cp['abs_angle_to_cp'] -
+            (pod['next_cp_rel']['abs_angle'] -
              pod['angle_facing'] + (pi / 2)
         ) % pi - (pi / 2)
     )
     heading_offset = (
         (
-            (next_cp['abs_angle_to_cp'] -
-             actual_heading_angle) + (pi / 2)
+            (pod['next_cp_rel']['abs_angle'] -
+             pod['actual_heading_angle']) + (pi / 2)
         ) % pi - (pi / 2)
     )
 
-    add_compensation_angle_info(next_cp, pod)
+    add_compensation_angle_info(pod['next_cp_rel'], pod)
 
     # ++++++++++++++++ANGLE TO NEXT cp+++++++++++++++++++++
 
-    following_cp = get_cp_info(following_cp_id, pod)
+    pod['following_cp_rel'] = get_cp_rel_info(pod['following_cp'], pod)
 
-    corner_cut = get_corner_cut(next_cp, following_cp, pod)
+    corner_cut = get_corner_cut(
+        pod['next_cp_rel'], pod['following_cp_rel'], pod
+        )
 
-    corner_cut_x = corner_cut['x']
-    corner_cut_y = corner_cut['y']
+    pod['corner_cut_x'] = corner_cut['x']
+    pod['corner_cut_y'] = corner_cut['y']
 
-    # +++++++++++++DISTANCE FROM PREVIOUS +++++++++++++++
+    # +++++++++++++d FROM PREVIOUS +++++++++++++++
 
-    distance_between_pod_and_previous_cp = math.hypot(
-        (pod['x'] - previous_cp['x']),
-        (pod['y'] - previous_cp['y']))
+    pod['d_previous_cp'] = math.hypot(
+        (pod['x'] - pod['previous_cp']['x']),
+        (pod['y'] - pod['previous_cp']['y']))
 
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # +++++++++++++++++++++HEADING ALGORITHM+++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    heading_x = next_cp['x']
-    heading_y = next_cp['y']
+    heading_x = pod['next_cp']['x']
+    heading_y = pod['next_cp']['y']
 
     thrust = 100
 
@@ -349,25 +353,26 @@ def get_info(pod):
     else:
         thrust = 100
 
-    heading_x += int(corner_cut_x)
-    heading_y += int(corner_cut_y)
+    #heading_x += int(corner_cut_x)
+    #heading_y += int(corner_cut_y)
 
     if abs(heading_offset) > 0.05:
-        heading_x += int(next_cp['x_compensation'] * 0.3)
-        heading_y += int(next_cp['y_compensation'] * 0.3)
+        heading_x += int(pod['next_cp_rel']['x_compensation'] * 0.3)
+        heading_y += int(pod['next_cp_rel']['y_compensation'] * 0.3)
 
-    if abs_velocity > 0:
+    if pod['abs_velocity'] > 0:
         time_to_target = (
-            next_cp['distance_to_cp'] /
-            abs_velocity
+            pod['next_cp_rel']['d'] /
+            pod['abs_velocity']
         )
         # print(f"time_to_target {time_to_target}", file=sys.stderr)
 
         if time_to_target < 5 and heading_offset < 0.9:
+            
             thrust = 0
             # add_compensation_angle_info(following_cp, pod)
-            heading_x = following_cp['x']
-            heading_y = following_cp['y']
+            heading_x = pod['following_cp_rel']['x']
+            heading_y = pod['following_cp_rel']['y']
 
     pod['heading_x'] = heading_x
     pod['heading_y'] = heading_y
@@ -429,7 +434,7 @@ while True:
         pod[i]['global_vx'] = global_vx
         pod[i]['global_vy'] = global_vy
         pod[i]['angle_facing'] = angle_facing_in_rads
-        pod[i]['next_cp'] = cps['next_cp_id']
+        pod[i]['next_cp'] = cps[next_cp_id]
 
         get_info(pod[i])
         print(f"{pod[i]}", file=sys.stderr)
