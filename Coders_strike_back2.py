@@ -165,118 +165,118 @@ def add_compensation_angle_info(cp_rel, pod):
     global_y_cp_overshoot = (cp_rel['global_y_overshoot'] - cp_rel['y'])
 
     # compensation values (point opposite target from overshoot)
-    cp_rel['x_compensation'] = int(-global_x_cp_overshoot)
-    cp_rel['y_compensation'] = int(-global_y_cp_overshoot)
+    cp_rel['x_compensation'] = max( min(int(-global_x_cp_overshoot), 1000), -1000)
+    cp_rel['y_compensation'] = max( min(int(-global_y_cp_overshoot), 1000), -1000)
 
 
-def get_corner_cut(next_cp_rel, following_cp_rel, pod):
+def get_corner_cut(current_cp_rel, next_cp_rel, pod):
     """
     Calculate where to aim to cut corner without missing target.
 
     Using the cp after the current target, calculate where
-    in the next target, the pod should aim, so as to corner efficiently.
+    in the current target, the pod should aim, so as to corner efficiently.
     Return an x and y coordinate.
 
     """
 
-    x_between_next_and_following_cp = (
-        next_cp_rel['x'] - following_cp_rel['x'])
-    y_between_next_and_following_cp = (
-        next_cp_rel['y'] - following_cp_rel['y'])
+    x_between_current_and_next_cp = (
+        current_cp_rel['x'] - next_cp_rel['x'])
+    y_between_current_and_next_cp = (
+        current_cp_rel['y'] - next_cp_rel['y'])
 
-    d_between_next_and_following_cp = math.hypot(
-        x_between_next_and_following_cp,
-        y_between_next_and_following_cp
+    d_between_current_and_next_cp = math.hypot(
+        x_between_current_and_next_cp,
+        y_between_current_and_next_cp
     )
 
-    # print(f"d_between_target_and_following_cp",
-    # "{d_between_target_and_following_cp}", file=sys.stderr)
+    # print(f"d_between_target_and_next_cp",
+    # "{d_between_target_and_next_cp}", file=sys.stderr)
 
-    x_between_pod_and_following_cp = following_cp_rel['x'] - pod['x']
-    y_between_pod_and_following_cp = following_cp_rel['y'] - pod['y']
+    x_between_pod_and_next_cp = next_cp_rel['x'] - pod['x']
+    y_between_pod_and_next_cp = next_cp_rel['y'] - pod['y']
 
-    d_between_pod_and_following_cp = math.hypot(
-        x_between_pod_and_following_cp,
-        y_between_pod_and_following_cp)
+    d_between_pod_and_next_cp = math.hypot(
+        x_between_pod_and_next_cp,
+        y_between_pod_and_next_cp)
 
-    # print(f"d_between_pod_and_following_cp",
-    # f"{d_between_pod_and_following_cp}", file=sys.stderr)
+    # print(f"d_between_pod_and_next_cp",
+    # f"{d_between_pod_and_next_cp}", file=sys.stderr)
 
     # law of cosines
-    angle_pod_next_following = math.acos(
+    pod['angle_pod_current_next'] = math.acos(
         (
-            d_between_pod_and_following_cp ** 2 -
-            next_cp_rel['d'] ** 2 -
-            d_between_next_and_following_cp ** 2
+            d_between_pod_and_next_cp ** 2 -
+            current_cp_rel['d'] ** 2 -
+            d_between_current_and_next_cp ** 2
         ) / (
-            -2 * next_cp_rel['d'] *
-            d_between_next_and_following_cp
+            -2 * current_cp_rel['d'] *
+            d_between_current_and_next_cp
         )
     )
 
-    # +++++ NEXT TARGET COMP +++++
+    # +++++ current TARGET COMP +++++
 
-    # form a triangle between the pod, the target and the following cp
+    # form a triangle between the pod, the target and the next cp
     # Then draw a line from the target towards the line formed between the pod
-    # and the following cp. The line from the target should form a
-    # right angle on the line from pod and following ckpoint.
+    # and the next cp. The line from the target should form a
+    # right angle on the line from pod and next ckpoint.
     # The point where these lines meet, where the right angle is formed,
     # I will call 'c'
-
-    angle_next_pod_following = math.asin(
-        (d_between_next_and_following_cp *
-         math.sin(angle_pod_next_following)) /
-        (d_between_pod_and_following_cp)
+    '''
+    angle_current_pod_next = math.asin(
+        (d_between_current_and_next_cp *
+         math.sin(angle_pod_current_next)) /
+        (d_between_pod_and_next_cp)
     )
 
     d_between_pod_and_c = (
-        next_cp_rel['d'] *
-        math.cos(angle_next_pod_following)
+        current_cp_rel['d'] *
+        math.cos(angle_current_pod_next)
     )
 
-    coeff_d_pod_c_and_pod_next = (
+    coeff_d_pod_c_and_pod_current = (
         d_between_pod_and_c /
-        d_between_pod_and_following_cp
+        d_between_pod_and_next_cp
     )
 
     x_between_pod_and_c = (
-        x_between_pod_and_following_cp *
-        coeff_d_pod_c_and_pod_next
+        x_between_pod_and_next_cp *
+        coeff_d_pod_c_and_pod_current
     )
     y_between_pod_and_c = (
-        y_between_pod_and_following_cp *
-        coeff_d_pod_c_and_pod_next
+        y_between_pod_and_next_cp *
+        coeff_d_pod_c_and_pod_current
     )
 
     global_cx = pod['x'] + x_between_pod_and_c
     global_cy = pod['y'] + y_between_pod_and_c
 
-    x_between_next_and_c = global_cx - next_cp_rel['x']
-    y_between_next_and_c = global_cy - next_cp_rel['y']
+    x_between_current_and_c = global_cx - current_cp_rel['x']
+    y_between_current_and_c = global_cy - current_cp_rel['y']
 
-    # print(f"x_between_next_and_c {x_between_next_and_c}",
+    # print(f"x_between_current_and_c {x_between_current_and_c}",
     # file=sys.stderr)
-    # print(f"y_between_next_and_c {y_between_next_and_c}",
+    # print(f"y_between_current_and_c {y_between_current_and_c}",
     # file=sys.stderr)
 
-    offset_from_next_center = 1100
+    offset_from_current_center = 1100
 
     coeff_for_corner = (
-        (offset_from_next_center ** 2) /
+        (offset_from_current_center ** 2) /
         (
-            x_between_next_and_c ** 2 +
-            y_between_next_and_c ** 2
+            x_between_current_and_c ** 2 +
+            y_between_current_and_c ** 2
         )
     )
 
-    comp_x_next_c = x_between_next_and_c * coeff_for_corner
-    comp_y_next_c = y_between_next_and_c * coeff_for_corner
+    comp_x_current_c = x_between_current_and_c * coeff_for_corner
+    comp_y_current_c = y_between_current_and_c * coeff_for_corner
 
-    return {'x': comp_x_next_c, 'y': comp_y_next_c}
+    return {'x': comp_x_current_c, 'y': comp_y_current_c}
 
     # print(f"comp_x_target_c {comp_x_target_c}", file=sys.stderr)
     # print(f"comp_y_target_c {comp_y_target_c}", file=sys.stderr)
-
+    '''
 
 def get_info(pod):
     """Get info relating to pod."""
@@ -284,8 +284,8 @@ def get_info(pod):
 
     angle_facing_in_rads = pod['angle_facing']
 
-    pod['following_cp'] = cps[(next_cp_id + 1) % (cp_count)]
-    pod['previous_cp'] = cps[(next_cp_id - 1) % (cp_count)]
+    pod['next_cp'] = cps[(current_cp_id + 1) % (cp_count)]
+    pod['last_cp'] = cps[(current_cp_id - 1) % (cp_count)]
 
     # translating global velocity as given to velocity relative to pod (0,0)
     pod['vx'] = pod['global_vx']
@@ -304,47 +304,51 @@ def get_info(pod):
 
     print(f" abs_velocity {int(pod['abs_velocity'])}", file=sys.stderr)
 
-    pod['next_cp_rel'] = get_cp_rel_info(pod['next_cp'], pod)
+    pod['current_cp_rel'] = get_cp_rel_info(pod['current_cp'], pod)
 
     facing_offset = (
-            (pod['next_cp_rel']['abs_angle'] -
+            (pod['current_cp_rel']['abs_angle'] -
              pod['angle_facing'] + (pi / 2)
         ) % pi - (pi / 2)
     )
     heading_offset = (
         (
-            (pod['next_cp_rel']['abs_angle'] -
+            (pod['current_cp_rel']['abs_angle'] -
              pod['actual_heading_angle']) + (pi / 2)
         ) % pi - (pi / 2)
     )
 
-    add_compensation_angle_info(pod['next_cp_rel'], pod)
+    add_compensation_angle_info(pod['current_cp_rel'], pod)
 
-    # ++++++++++++++++ANGLE TO NEXT cp+++++++++++++++++++++
+    # ++++++++++++++++ANGLE TO current cp+++++++++++++++++++++
 
-    pod['following_cp_rel'] = get_cp_rel_info(pod['following_cp'], pod)
+    pod['next_cp_rel'] = get_cp_rel_info(pod['next_cp'], pod)
 
     corner_cut = get_corner_cut(
-        pod['next_cp_rel'], pod['following_cp_rel'], pod
+        pod['current_cp_rel'], pod['next_cp_rel'], pod
         )
 
-    pod['corner_cut_x'] = corner_cut['x']
-    pod['corner_cut_y'] = corner_cut['y']
+    #pod['corner_cut_x'] = corner_cut['x']
+    #pod['corner_cut_y'] = corner_cut['y']
 
-    # +++++++++++++d FROM PREVIOUS +++++++++++++++
+    # +++++++++++++d FROM last +++++++++++++++
 
-    pod['d_previous_cp'] = math.hypot(
-        (pod['x'] - pod['previous_cp']['x']),
-        (pod['y'] - pod['previous_cp']['y']))
+    pod['d_last_cp'] = math.hypot(
+        (pod['x'] - pod['last_cp']['x']),
+        (pod['y'] - pod['last_cp']['y']))
 
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # +++++++++++++++++++++HEADING ALGORITHM+++++++++++++++++++++++
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    heading_x = pod['next_cp']['x']
-    heading_y = pod['next_cp']['y']
+    heading_x = pod['current_cp']['x']
+    heading_y = pod['current_cp']['y']
 
     thrust = 100
+
+
+    if pod['current_cp_rel']['d'] > 3000:
+        thrust = BOOST
 
     if abs(facing_offset) > 1.5:
         thrust = 20
@@ -357,34 +361,39 @@ def get_info(pod):
     #heading_y += int(corner_cut_y)
 
     if abs(heading_offset) > 0.05:
-        heading_x += int(pod['next_cp_rel']['x_compensation'] * 0.3)
-        heading_y += int(pod['next_cp_rel']['y_compensation'] * 0.3)
+        heading_x += pod['current_cp_rel']['x_compensation']
+        heading_y += pod['current_cp_rel']['y_compensation']
 
     if pod['abs_velocity'] > 0:
         time_to_target = (
-            pod['next_cp_rel']['d'] /
+            pod['current_cp_rel']['d'] /
             pod['abs_velocity']
         )
         # print(f"time_to_target {time_to_target}", file=sys.stderr)
 
         if time_to_target < 5 and heading_offset < 0.9:
-            
-            thrust = 0
-            # add_compensation_angle_info(following_cp, pod)
-            heading_x = pod['following_cp_rel']['x']
-            heading_y = pod['following_cp_rel']['y']
+            get_corner_cut(pod['current_cp_rel'], pod['next_cp_rel'], pod)
+            if abs(pod['angle_pod_current_next']) > 2.5:
+                thrust = 100
+            elif abs(pod['angle_pod_current_next']) > pi/2:
+                add_compensation_angle_info(pod['next_cp_rel'], pod)
+                thrust = 50
+                # add_compensation_angle_info(next_cp, pod)
+                heading_x = pod['next_cp_rel']['x'] + pod['next_cp_rel']['x_compensation']
+                heading_y = pod['next_cp_rel']['y'] + pod['next_cp_rel']['y_compensation']
+            elif abs(pod['angle_pod_current_next']) < pi/2:
+                add_compensation_angle_info(pod['next_cp_rel'], pod)
+                thrust = 0
+                # add_compensation_angle_info(next_cp, pod)
+                heading_x = pod['next_cp_rel']['x'] + pod['next_cp_rel']['x_compensation']
+                heading_y = pod['next_cp_rel']['y'] + pod['next_cp_rel']['y_compensation']
 
     pod['heading_x'] = heading_x
     pod['heading_y'] = heading_y
     pod['thrust'] = thrust
 
 
-pod = {
-    0: {},
-    1: {},
-    2: {},
-    3: {}
-}
+
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -393,6 +402,12 @@ pod = {
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+pod = {
+    0: {},
+    1: {},
+    2: {},
+    3: {}
+}
 
 laps = int(input())
 cp_count = int(input())
@@ -413,7 +428,7 @@ while True:
     counter += 1
     for i in range(2):
 
-        x, y, global_vx, global_vy, angle_facing, next_cp_id = [
+        x, y, global_vx, global_vy, angle_facing, current_cp_id = [
             int(j) for j in input().split()]
 
         # change to counter clockwise angle
@@ -424,7 +439,7 @@ while True:
         angle_facing = (angle_facing - 175) % 360 - 180
         angle_facing_in_rads = angle_facing * (pi / 180)
 
-        print(f" i:{i} next cp {next_cp_id} "
+        print(f" i:{i} current cp {current_cp_id} "
               f"angle facing:{angle_facing_in_rads} "
               f"x:{x}  y:{y} global_vx:{global_vx}  global_vy:{global_vy}",
               file=sys.stderr)
@@ -434,14 +449,14 @@ while True:
         pod[i]['global_vx'] = global_vx
         pod[i]['global_vy'] = global_vy
         pod[i]['angle_facing'] = angle_facing_in_rads
-        pod[i]['next_cp'] = cps[next_cp_id]
+        pod[i]['current_cp'] = cps[current_cp_id]
 
         get_info(pod[i])
         print(f"{pod[i]}", file=sys.stderr)
 
     for i in range(2):
         # OPPONENT
-        x_2, y_2, global_vx_2, global_vy_2, angle_2, next_check_point_id_2 = [
+        x_2, y_2, global_vx_2, global_vy_2, angle_2, current_check_point_id_2 = [
             int(j) for j in input().split()]
 
     print(f"{pod[0]['heading_x']} {pod[0]['heading_y']} {pod[0]['thrust']}")
