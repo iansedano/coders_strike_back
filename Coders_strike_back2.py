@@ -14,22 +14,18 @@ import sys
 import math
 import numpy as np
 
-laps = int(input())
-cp_count = int(input())
 
-cps = {}
-for i in range(cp_count):
-    cp_x, cp_y = [int(j) for j in input().split()]
-#    print(f"{cp_x}", file=sys.stderr)
-    cps[i] = {'x': cp_x, 'y': cp_y}
-cp_count
-# print(f"cp count {cp_count}", file=sys.stderr)
-# print(f"test {cps[1]['x']}", file=sys.stderr)
 
-counter = 0
 
 pi = 3.14159
 
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++FUNCTIONS++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 def constrain(val, min_val, max_val):
     """Constrain value between min and max."""
@@ -60,72 +56,62 @@ def quad_from_vector(global_vx, global_vy):
         return 4
 
 
-def get_cp_info(cp_id, pod):
+
+def get_cp_rel_info(cp, pod):
     """
     Return dictionary with cp info.
 
     Return a dictionay with information relating
     to cp and pod.
     """
-    
-    x = cps[cp_id]['x']
-    y = cps[cp_id]['y']
+
+    cp_rel = {}
 
     # x and y from pod to cp
-    global_pod_to_cp_x = x - pod['x']
-    global_pod_to_cp_y = y - pod['y']
+    cp_rel['global_x_to_cp'] = cp['x'] - pod['x']
+    cp_rel['global_y_to_cp'] = cp['y'] - pod['y']
 
     # distance to cp
-    distance_to_cp = math.hypot(
-        global_pod_to_cp_x,
-        global_pod_to_cp_y)
+    cp_rel['d'] = math.hypot(
+        cp_rel['global_x_to_cp'],
+        cp_rel['global_y_to_cp'])
 
     # print(f"distance_to_cp {int(distance_to_cp)}",
     #       file=sys.stderr)
 
-    cp_quadrant = quad_from_pos(x, y, pod['x'], pod['y'])
+    cp_rel['quadrant'] = quad_from_pos(cp['x'], cp['y'], pod['x'], pod['y'])
 
-    x_to_cp_from_pod = 0  # initalizing TODO deal with 0 values
-    y_to_cp_from_pod = 0  # initalizing TODO deal with 0 values
+    cp_rel['x_to_cp'] = 0  # initalizing TODO deal with 0 values
+    cp_rel['y_to_cp'] = 0  # initalizing TODO deal with 0 values
 
-    if cp_quadrant == 1:
-        x_to_cp_from_pod = x - pod['x']
-        y_to_cp_from_pod = pod['y'] - y
+    if cp_rel['quadrant'] == 1:
+        cp_rel['x_to_cp'] = cp['x'] - pod['x']
+        cp_rel['y_to_cp'] = pod['y'] - cp['y']
     elif cp_quadrant == 2:
-        x_to_cp_from_pod = (pod['x'] - x) * -1
-        y_to_cp_from_pod = pod['y'] - y
+        cp_rel['x_to_cp'] = (pod['x'] - cp['x']) * -1
+        cp_rel['y_to_cp'] = pod['y'] - cp['y']
     elif cp_quadrant == 3:
-        x_to_cp_from_pod = (pod['x'] - x) * -1
-        y_to_cp_from_pod = (y - pod['y']) * -1
+        cp_rel['x_to_cp'] = (pod['x'] - cp['x']) * -1
+        cp_rel['y_to_cp'] = (cp['y'] - pod['y']) * -1
     elif cp_quadrant == 4:
-        x_to_cp_from_pod = x - pod['x']
-        y_to_cp_from_pod = (y - pod['y']) * -1
+        cp_rel['x_to_cp'] = cp['x'] - pod['x']
+        cp_rel['y_to_cp'] = (cp['y'] - pod['y']) * -1
 
     # getting the absolute angle of the cp from the pods position
-    abs_angle_to_cp = abs_angle_to_cp = math.atan2(
-        y_to_cp_from_pod, x_to_cp_from_pod)
+    cp_rel['abs_angle'] = math.atan2(
+        cp_rel['y_to_cp'], cp_rel['x_to_cp'])
 
-    facing_offset = (
-        (abs_angle_to_cp - pod['angle_facing']) +
+    cp_rel['facing_offset'] = (
+        (cp_rel['abs_angle'] - pod['angle_facing']) +
         (pi / 2)) % pi - (pi / 2)
-    heading_offset = (
-        (abs_angle_to_cp - pod['actual_heading_angle']) +
+    cp_rel['heading_offset'] = (
+        (cp_rel['abs_angle'] - pod['actual_heading_angle']) +
         (pi / 2)) % pi - (pi / 2)
 
-    return{
-        'x': x,
-        'y': y,
-        'distance_to_cp': distance_to_cp,
-        'x_to_cp_from_pod': x_to_cp_from_pod,
-        'y_to_cp_from_pod': y_to_cp_from_pod,
-        'abs_angle_to_cp': abs_angle_to_cp,
-        'cp_quadrant': cp_quadrant,
-        'facing_offset': facing_offset,
-        'heading_offset': heading_offset
-    }
+    return cp_rel
 
 
-def add_compensation_angle_info(cp_info_dict, pod):
+def add_compensation_angle_info(cp_rel, pod):
     """
     Add compensation turning angle to the cp dictionary.
 
@@ -143,41 +129,41 @@ def add_compensation_angle_info(cp_info_dict, pod):
     Use the properties of this triangle to produce a compensation to the
     normal heading (x, y)
     """
-    heading_offset = cp_info_dict['heading_offset']
-    distance_to_cp = cp_info_dict['distance_to_cp']
 
     # how far the current heading will miss the target
-    vector_overshoot = abs(
-        distance_to_cp * math.tan(abs(heading_offset))
+    cp_rel['overshoot_d'] = abs(
+        cp_rel['d'] * math.tan(
+            abs(cp_rel['heading_offset'])
+        )
     )
-    print(f"vector_overshoot {vector_overshoot}", file=sys.stderr)
+    print(f"overshoot_d {cp_rel['overshoot_d']}", file=sys.stderr)
 
     # the distance between pod and the overshoot point.
-    extension_of_pod_vector_length = math.hypot(
-        distance_to_cp, vector_overshoot
+    cp_rel['projection_pod_vector_d'] = math.hypot(
+        cp_rel['d'], cp_rel['overshoot_d']
     )
 
-    print(f"extension_of_pod_vector_length {extension_of_pod_vector_length}",
+    print(f"projection_pod_vector_d {projection_pod_vector_d}",
           file=sys.stderr)
 
     # coordinates of overshoot relative to pod
 
-    x_of_vector_overshoot = (extension_of_pod_vector_length *
+    cp_rel['x_overshoot'] = (cp_rel['projection_pod_vector_d'] *
                              math.cos(pod['actual_heading_angle']))
-    y_of_vector_overshoot = (extension_of_pod_vector_length *
+    cp_rel['y_overshoot'] = (cp_rel['projection_pod_vector_d'] *
                              math.sin(pod['actual_heading_angle']))
 
     # absolute values
-    global_x_overshoot = (pod['x'] + x_of_vector_overshoot)
-    global_y_overshoot = (pod['y'] - y_of_vector_overshoot)
+    cp_rel['global_x_overshoot'] = (pod['x'] + cp_rel['x_overshoot'])
+    cp_rel['global_y_overshoot'] = (pod['y'] - cp_rel['y_overshoot'])
 
     # distance between overshoot point and taget
-    x_diff_overshoot_target = (global_x_overshoot - cp_info_dict['x'])
-    y_diff_overshoot_target = (global_y_overshoot - cp_info_dict['y'])
+    global_x_cp_overshoot = (global_x_overshoot - cp_rel['x'])
+    global_y_cp_overshoot = (global_y_overshoot - cp_rel['y'])
 
     # compensation values (point opposite target from overshoot)
-    cp_info_dict['x_compensation'] = int(-x_diff_overshoot_target)
-    cp_info_dict['y_compensation'] = int(-y_diff_overshoot_target)
+    cp_rel['x_compensation'] = int(-global_x_cp_overshoot)
+    cp_rel['y_compensation'] = int(-global_y_cp_overshoot)
 
 
 def get_corner_cut(next_cp, following_cp, pod):
@@ -292,16 +278,15 @@ def get_corner_cut(next_cp, following_cp, pod):
 def get_info(pod):
     """Get info relating to pod."""
     # Establishing target cp
-    pod['x'] = pod['x']
-    pod_y = pod['y']
-    global_vx = pod['global_vx']
-    global_vy = pod['global_vy']
+
     angle_facing_in_rads = pod['angle_facing']
-    next_cp_id = pod['next_cp_id']
+
+    pod['following_cp'] = cps[(next_cp_id + 1) % (cp_count)]
+    pod['previous_cp'] = cps[(next_cp_id - 1) % (cp_count)]
 
     # translating global velocity as given to velocity relative to pod (0,0)
-    pod['vx'] = pod_vx = global_vx
-    pod['vy'] = pod_vy = global_vy * -1
+    pod['vx'] = pod['global_vx']
+    pod['vy'] = pod['global_vy'] * -1
 
     # getting the angle of the pods direction calculated from vector
     pod['actual_heading_angle'] = actual_heading_angle = (
@@ -309,19 +294,19 @@ def get_info(pod):
     )  # TODO deal with zero values
 
     # getting the quadrant the vector is facing
-    pod['vector_quad'] = vector_quad = quad_from_vector(pod_vx, pod_vy)
+    pod['vector_quad'] = quad_from_vector(pod['vx'], pod['vy'])
 
     # getting the absolute magnitude of pod vector
-    pod['abs_velocity'] = abs_velocity = math.hypot(pod_vx, pod_vy)
+    pod['abs_velocity'] = math.hypot(pod['vx'], pod['vy'])
 
     print(f" abs_velocity {int(abs_velocity)}", file=sys.stderr)
 
-    next_cp = get_cp_info(next_cp_id, pod)
+    pod['next_cp_rel'] = get_cp_rel_info(pod['next_cp'], pod)
 
     facing_offset = (
         (
             (next_cp['abs_angle_to_cp'] -
-             angle_facing_in_rads) + (pi / 2)
+             pod['angle_facing'] + (pi / 2)
         ) % pi - (pi / 2)
     )
     heading_offset = (
@@ -335,11 +320,6 @@ def get_info(pod):
 
     # ++++++++++++++++ANGLE TO NEXT cp+++++++++++++++++++++
 
-    following_cp_id = (next_cp_id + 1) % (cp_count)
-    # print(f"following cp id"
-    #       f"{(next_cp_id + 1) % (cp_count)}",
-    #       file=sys.stderr)
-
     following_cp = get_cp_info(following_cp_id, pod)
 
     corner_cut = get_corner_cut(next_cp, following_cp, pod)
@@ -347,22 +327,11 @@ def get_info(pod):
     corner_cut_x = corner_cut['x']
     corner_cut_y = corner_cut['y']
 
-    # +++++++++++++DISTANCE FROM PREVIOUS cp+++++++++++++++
-
-    previous_cp_id = (next_cp_id - 1) % (cp_count)
-
-    # print(f"previous_cp_id {previous_cp_id}",
-    # file=sys.stderr)
-
-    previous_cp_x = cps[previous_cp_id]['x']
-    previous_cp_y = cps[previous_cp_id]['y']
-
-    x_between_pod_and_previous_cp = pod['x'] - previous_cp_x
-    y_between_pod_and_previous_cp = pod['y'] - previous_cp_y
+    # +++++++++++++DISTANCE FROM PREVIOUS +++++++++++++++
 
     distance_between_pod_and_previous_cp = math.hypot(
-        x_between_pod_and_previous_cp,
-        y_between_pod_and_previous_cp)
+        (pod['x'] - previous_cp['x']),
+        (pod['y'] - previous_cp['y']))
 
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # +++++++++++++++++++++HEADING ALGORITHM+++++++++++++++++++++++
@@ -420,6 +389,21 @@ pod = {
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+laps = int(input())
+cp_count = int(input())
+
+cps = {}
+for i in range(cp_count):
+    cp_x, cp_y = [int(j) for j in input().split()]
+#    print(f"{cp_x}", file=sys.stderr)
+    cps[i] = {'x': cp_x, 'y': cp_y}
+
+# print(f"cp count {cp_count}", file=sys.stderr)
+# print(f"test {cps[1]['x']}", file=sys.stderr)
+
+counter = 0
+
+
 while True:
     counter += 1
     for i in range(2):
@@ -445,7 +429,7 @@ while True:
         pod[i]['global_vx'] = global_vx
         pod[i]['global_vy'] = global_vy
         pod[i]['angle_facing'] = angle_facing_in_rads
-        pod[i]['next_cp_id'] = next_cp_id
+        pod[i]['next_cp'] = cps['next_cp_id']
 
         get_info(pod[i])
         print(f"{pod[i]}", file=sys.stderr)
