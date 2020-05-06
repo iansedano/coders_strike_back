@@ -290,7 +290,7 @@ def get_heading(pod):
     # heading_x += int(corner_cut_x)
     # heading_y += int(corner_cut_y)
 
-    if abs(pod['next_cp_rel']['heading_offset']) > 0.05:
+    if abs(pod['current_cp_rel']['heading_offset']) > 0.05:
         pod['heading_x'] += pod['current_cp_rel']['x_compensation']
         pod['heading_y'] += pod['current_cp_rel']['y_compensation']
 
@@ -306,11 +306,11 @@ def get_heading(pod):
             pod['next_cp_rel']['y'] +
             pod['next_cp_rel']['y_compensation'])
 
-    print(f"heading offset{pod['next_cp_rel']['heading_offset']}", file=sys.stderr)
+    print(f"heading offset{pod['current_cp_rel']['heading_offset']}", file=sys.stderr)
 
     if (
             pod['abs_velocity'] > 0 and
-            abs(pod['next_cp_rel']['heading_offset']) < 1):
+            abs(pod['current_cp_rel']['heading_offset']) < 1):
 
         time_to_target = (
             pod['current_cp_rel']['d'] /
@@ -326,7 +326,7 @@ def get_heading(pod):
                 set_next_cp_compensation_heading(pod)
                 pod['thrust'] = 100
 
-        elif abs(pod['angle_pod_current_next']) < pi/2:
+        elif abs(pod['angle_pod_current_next']) > pi/2:
             print(f"hard 90", file=sys.stderr)
             if time_to_target < 4:
                 set_next_cp_compensation_heading(pod)
