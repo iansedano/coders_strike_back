@@ -105,7 +105,6 @@ def get_cp_rel_info(cp, pod):
     cp_rel['heading_offset'] = (
         (cp_rel['abs_angle'] - pod['actual_heading_angle']) +
         (pi / 2)) % pi - (pi / 2)
-
     return cp_rel
 
 
@@ -134,15 +133,15 @@ def add_compensation_angle_info(cp_rel, pod):
             abs(cp_rel['heading_offset'])
         )
     )
-    print(f"overshoot_d {overshoot_d}", file=sys.stderr)
+    # print(f"overshoot_d {overshoot_d}", file=sys.stderr)
 
     # the d between pod and the overshoot point.
     projection_pod_vector_d = math.hypot(
         cp_rel['d'], overshoot_d
     )
 
-    print(f"projection_pod_vector_d {projection_pod_vector_d}",
-          file=sys.stderr)
+    # print(f"projection_pod_vector_d {projection_pod_vector_d}",
+    #      file=sys.stderr)
 
     # coordinates of overshoot relative to pod
 
@@ -278,63 +277,65 @@ def get_corner_cut(pod):
 
 def get_heading(pod):
 
-    heading_x = pod['current_cp']['x']
-    heading_y = pod['current_cp']['y']
+    pod['heading_x'] = pod['current_cp']['x']
+    pod['heading_y'] = pod['current_cp']['y']
 
-    thrust = 100
+    pod['thrust'] = 100
 
-    if pod['current_cp_rel']['d'] > 3000:
-        thrust = "BOOST"
-
-    if abs(pod['next_cp_rel']['facing_offset']) > 1.5:
-        thrust = 20
-    elif abs(pod['next_cp_rel']['facing_offset']) > 0.7:
-        thrust = 90
-    else:
-        thrust = 100
+    if (
+            pod['current_cp_rel']['d'] > 2000 and
+            pod['next_cp_rel']['heading_offset'] < 1):
+        pod['thrust'] = "BOOST"
 
     # heading_x += int(corner_cut_x)
     # heading_y += int(corner_cut_y)
 
     if abs(pod['next_cp_rel']['heading_offset']) > 0.05:
-        heading_x += pod['current_cp_rel']['x_compensation']
-        heading_y += pod['current_cp_rel']['y_compensation']
+        pod['heading_x'] += pod['current_cp_rel']['x_compensation']
+        pod['heading_y'] += pod['current_cp_rel']['y_compensation']
 
-    if pod['abs_velocity'] > 0:
+    # CORNERING
+
+    def set_next_cp_compensation_heading(pod):
+        add_compensation_angle_info(pod['next_cp_rel'], pod)
+        # add_compensation_angle_info(next_cp, pod)
+        pod['heading_x'] = (
+            pod['next_cp_rel']['x'] +
+            pod['next_cp_rel']['x_compensation'])
+        pod['heading_y'] = (
+            pod['next_cp_rel']['y'] +
+            pod['next_cp_rel']['y_compensation'])
+
+    print(f"heading offset{pod['next_cp_rel']['heading_offset']}", file=sys.stderr)
+
+    if (
+            pod['abs_velocity'] > 0 and
+            abs(pod['next_cp_rel']['heading_offset']) < 1):
+
         time_to_target = (
             pod['current_cp_rel']['d'] /
             pod['abs_velocity']
         )
         # print(f"time_to_target {time_to_target}", file=sys.stderr)
+        get_angle_to_next_cp(pod['current_cp_rel'],
+                             pod['next_cp_rel'], pod)
 
-        if time_to_target < 5 and pod['next_cp_rel']['heading_offset'] < 0.9:
-            get_angle_to_next_cp(pod['current_cp_rel'], pod['next_cp_rel'], pod)
-            if abs(pod['angle_pod_current_next']) > 2.5:
-                thrust = 100
-            elif abs(pod['angle_pod_current_next']) > pi/2:
-                add_compensation_angle_info(pod['next_cp_rel'], pod)
-                thrust = 50
-                # add_compensation_angle_info(next_cp, pod)
-                heading_x = (
-                    pod['next_cp_rel']['x'] +
-                    pod['next_cp_rel']['x_compensation'])
-                heading_y = (
-                    pod['next_cp_rel']['y'] +
-                    pod['next_cp_rel']['y_compensation'])
-            elif abs(pod['angle_pod_current_next']) < pi/2:
-                add_compensation_angle_info(pod['next_cp_rel'], pod)
-                thrust = 0
-                # add_compensation_angle_info(next_cp, pod)
-                heading_x = (
-                    pod['next_cp_rel']['x'] +
-                    pod['next_cp_rel']['x_compensation'])
-                heading_y = (
-                    pod['next_cp_rel']['y'] +
-                    pod['next_cp_rel']['y_compensation'])
+        if abs(pod['angle_pod_current_next']) > 2.3:
+            print(f"full speed", file=sys.stderr)
+            if time_to_target < 3:
+                set_next_cp_compensation_heading(pod)
+                pod['thrust'] = 100
 
-    pod['heading_x'] = heading_x
-    pod['heading_y'] = heading_y
-    pod['thrust'] = thrust
+        elif abs(pod['angle_pod_current_next']) < pi/2:
+            print(f"hard 90", file=sys.stderr)
+            if time_to_target < 4:
+                set_next_cp_compensation_heading(pod)
+                pod['thrust'] = 20
+
+        elif abs(pod['angle_pod_current_next']) < pi/2:
+            print(f"hairpin", file=sys.stderr)
+            if time_to_target < 5:
+                pod['thrust'] = 0
 
 
 def get_info(pod):
@@ -362,19 +363,11 @@ def get_info(pod):
     # getting the absolute magnitude of pod vector
     pod['abs_velocity'] = math.hypot(pod['vx'], pod['vy'])
 
-    print(f" abs_velocity {int(pod['abs_velocity'])}", file=sys.stderr)
+    # print(f" abs_velocity {int(pod['abs_velocity'])}", file=sys.stderr)
 
     pod['current_cp_rel'] = get_cp_rel_info(pod['current_cp'], pod)
 
-    facing_offset = (
-            (pod['current_cp_rel']['abs_angle'] -
-             pod['angle_facing'] + (pi / 2)
-             ) % pi - (pi / 2)
-    )
-    heading_offset = (
-            (pod['current_cp_rel']['abs_angle'] -
-             pod['actual_heading_angle']) + (pi / 2)
-             ) % pi - (pi / 2)
+    
 
     add_compensation_angle_info(pod['current_cp_rel'], pod)
 
@@ -441,10 +434,10 @@ while True:
         angle_facing = (angle_facing - 175) % 360 - 180
         angle_facing_in_rads = angle_facing * (pi / 180)
 
-        print(f" i:{i} current cp {current_cp_id} "
-              f"angle facing:{angle_facing_in_rads} "
-              f"x:{x}  y:{y} global_vx:{global_vx}  global_vy:{global_vy}",
-              file=sys.stderr)
+        # print(f" i:{i} current cp {current_cp_id} "
+        #       f"angle facing:{angle_facing_in_rads} "
+        #       f"x:{x}  y:{y} global_vx:{global_vx}  global_vy:{global_vy}",
+        #       file=sys.stderr)
 
         pod[i]['x'] = x
         pod[i]['y'] = y
@@ -454,7 +447,7 @@ while True:
         pod[i]['current_cp'] = cps[current_cp_id]
 
         get_info(pod[i])
-        print(f"{pod[i]}", file=sys.stderr)
+        # print(f"{pod[i]}", file=sys.stderr)
 
     for i in range(2):
         # OPPONENT
