@@ -283,7 +283,7 @@ def get_heading(pod):
     pod['thrust'] = 100
 
     if (
-            pod['current_cp_rel']['d'] > 2000 and
+            pod['current_cp_rel']['d'] > 4000 and
             pod['next_cp_rel']['heading_offset'] < 1):
         pod['thrust'] = "BOOST"
 
@@ -322,20 +322,27 @@ def get_heading(pod):
 
         if abs(pod['angle_pod_current_next']) > 2.3:
             print(f"full speed", file=sys.stderr)
-            if time_to_target < 3:
+            if time_to_target < 5:
                 set_next_cp_compensation_heading(pod)
                 pod['thrust'] = 100
 
         elif abs(pod['angle_pod_current_next']) > pi/2:
-            print(f"hard 90", file=sys.stderr)
+            print(f"soft 90", file=sys.stderr)
             if time_to_target < 4:
                 set_next_cp_compensation_heading(pod)
-                pod['thrust'] = 20
+                pod['thrust'] = 100
 
-        elif abs(pod['angle_pod_current_next']) < pi/2:
+        elif abs(pod['angle_pod_current_next']) > pi/4:
+            print(f"hard 90", file=sys.stderr)
+            if time_to_target < 5:
+                set_next_cp_compensation_heading(pod)
+                pod['thrust'] = 40
+
+        elif abs(pod['angle_pod_current_next']) < pi/4:
             print(f"hairpin", file=sys.stderr)
             if time_to_target < 5:
-                pod['thrust'] = 0
+                set_next_cp_compensation_heading(pod)
+                pod['thrust'] = 10
 
 
 def get_info(pod):
