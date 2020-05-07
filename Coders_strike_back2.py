@@ -52,6 +52,17 @@ def quad_from_vector(global_vx, global_vy):
         return 4
 
 
+def get_signed_angle(a1, a2):
+
+    diff = a1 - a2
+    if diff > pi:
+        diff -= pi*2
+    if diff < -pi:
+        diff += pi*2
+
+    return diff
+
+
 def get_cp_rel_info(cp, pod):
     """
     Return dictionary with cp info.
@@ -99,12 +110,14 @@ def get_cp_rel_info(cp, pod):
     cp_rel['abs_angle'] = math.atan2(
         y_to_cp, x_to_cp)
 
-    cp_rel['facing_offset'] = (
-        (cp_rel['abs_angle'] - pod['angle_facing']) +
-        (pi / 2)) % pi - (pi / 2)
-    cp_rel['heading_offset'] = (
-        (cp_rel['abs_angle'] - pod['actual_heading_angle']) +
-        (pi / 2)) % pi - (pi / 2)
+    cp_rel['facing_offset'] = get_signed_angle(
+        cp_rel['abs_angle'], pod['angle_facing']
+        )
+
+    cp_rel['heading_offset'] = get_signed_angle(
+        cp_rel['abs_angle'], pod['actual_heading_angle']
+        )
+
     return cp_rel
 
 
@@ -275,6 +288,71 @@ def get_corner_cut(pod):
     # print(f"comp_y_target_c {comp_y_target_c}", file=sys.stderr)
 
 
+def set_next_cp_compensation_heading(pod):
+    add_compensation_angle_info(pod['next_cp_rel'], pod)
+    # add_compensation_angle_info(next_cp, pod)
+    pod['heading_x'] = (
+        pod['next_cp_rel']['x'] +
+        pod['next_cp_rel']['x_compensation'])
+    pod['heading_y'] = (
+        pod['next_cp_rel']['y'] +
+        pod['next_cp_rel']['y_compensation'])
+
+
+def corner(pod):
+
+    time_to_target = (
+            pod['current_cp_rel']['d'] /
+            pod['abs_velocity']
+        )
+    # print(f"time_to_target {time_to_target}", file=sys.stderr)
+    get_angle_to_next_cp(pod['current_cp_rel'],
+                         pod['next_cp_rel'], pod)
+
+    if abs(pod['angle_pod_current_next']) > pi * 4/5:
+        print(f"full speed", file=sys.stderr)
+        if time_to_target < 6:
+            set_next_cp_compensation_heading(pod)
+            pod['thrust'] = 100
+
+    elif abs(pod['angle_pod_current_next']) > pi * 3/5:
+        print(f"soft", file=sys.stderr)
+        if time_to_target < 5.65:
+            set_next_cp_compensation_heading(pod)
+            pod['thrust'] = 100
+
+    elif abs(pod['angle_pod_current_next']) > pi * 2/5:
+        print(f"90", file=sys.stderr)
+        if time_to_target < 5:
+            set_next_cp_compensation_heading(pod)
+            pod['thrust'] = 80
+
+    elif abs(pod['angle_pod_current_next']) > pi * 1/5:
+        print(f"hard", file=sys.stderr)
+        pod['heading_x'] += pod['current_cp_rel']['x_compensation']
+        pod['heading_y'] += pod['current_cp_rel']['y_compensation']
+        if time_to_target < 5.85:
+            set_next_cp_compensation_heading(pod)
+            pod['thrust'] = 20
+
+    elif abs(pod['angle_pod_current_next']) < pi * 1/5:
+        print(f"hairpin", file=sys.stderr)
+        pod['heading_x'] += pod['current_cp_rel']['x_compensation']
+        pod['heading_y'] += pod['current_cp_rel']['y_compensation']
+        if time_to_target < 5.8:
+            set_next_cp_compensation_heading(pod)
+            pod['thrust'] = 10
+
+
+def facing_compensation(pod):
+
+    if abs(pod['current_cp_rel']['facing_offset']) > pi * 4/5:
+        pod['thrust'] = 20
+
+    elif abs(pod['current_cp_rel']['facing_offset']) > pi * 3/5:
+        pod['thrust'] = 30
+
+
 def get_heading(pod):
 
     pod['heading_x'] = pod['current_cp']['x']
@@ -296,67 +374,18 @@ def get_heading(pod):
 
     # CORNERING
 
-    def set_next_cp_compensation_heading(pod):
-        add_compensation_angle_info(pod['next_cp_rel'], pod)
-        # add_compensation_angle_info(next_cp, pod)
-        pod['heading_x'] = (
-            pod['next_cp_rel']['x'] +
-            pod['next_cp_rel']['x_compensation'])
-        pod['heading_y'] = (
-            pod['next_cp_rel']['y'] +
-            pod['next_cp_rel']['y_compensation'])
-
     print(f"d{round(pod['current_cp_rel']['d'], 5)}", file=sys.stderr)
+    print(f"actual_heading_angle {pod['actual_heading_angle']}  abs angle {pod['current_cp_rel']['abs_angle']}",
+          file=sys.stderr)
     print(f"heading offset{round(pod['current_cp_rel']['heading_offset'], 5)}", file=sys.stderr)
 
     if (
             pod['abs_velocity'] > 0 and
             abs(pod['current_cp_rel']['heading_offset']) < 1):
 
-        if (  # this is to abort corner if leaving target...
-                abs(pod['current_cp_rel']['heading_offset']) > 0.5 and
-                pod['current_cp_rel']['d'] < 2000):
+        corner(pod)
 
-            pod['heading_x'] = pod['current_cp']['x']
-            pod['heading_y'] = pod['current_cp']['y']
-            pod['heading_x'] += pod['current_cp_rel']['x_compensation']
-            pod['heading_y'] += pod['current_cp_rel']['y_compensation']
-
-        else:
-
-            time_to_target = (
-                pod['current_cp_rel']['d'] /
-                pod['abs_velocity']
-            )
-            # print(f"time_to_target {time_to_target}", file=sys.stderr)
-            get_angle_to_next_cp(pod['current_cp_rel'],
-                                 pod['next_cp_rel'], pod)
-
-            if abs(pod['angle_pod_current_next']) > 2.3:
-                print(f"full speed", file=sys.stderr)
-                if time_to_target < 6:
-                    set_next_cp_compensation_heading(pod)
-                    pod['thrust'] = 100
-
-            elif abs(pod['angle_pod_current_next']) > pi/2:
-                print(f"soft 90", file=sys.stderr)
-                if time_to_target < 5.65:
-                    set_next_cp_compensation_heading(pod)
-                    pod['thrust'] = 100
-
-            elif abs(pod['angle_pod_current_next']) > pi/4:
-                print(f"hard 90", file=sys.stderr)
-                if time_to_target < 5.8:
-                    set_next_cp_compensation_heading(pod)
-                    pod['thrust'] = 50
-
-            elif abs(pod['angle_pod_current_next']) < pi/4:
-                print(f"hairpin", file=sys.stderr)
-                pod['heading_x'] += pod['current_cp_rel']['x_compensation']
-                pod['heading_y'] += pod['current_cp_rel']['y_compensation']
-                if time_to_target < 5.8:
-                    set_next_cp_compensation_heading(pod)
-                    pod['thrust'] = 10
+    facing_compensation(pod)
 
 
 def get_info(pod):
@@ -387,8 +416,6 @@ def get_info(pod):
     # print(f" abs_velocity {int(pod['abs_velocity'])}", file=sys.stderr)
 
     pod['current_cp_rel'] = get_cp_rel_info(pod['current_cp'], pod)
-
-    
 
     add_compensation_angle_info(pod['current_cp_rel'], pod)
 
