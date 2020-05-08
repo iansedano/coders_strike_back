@@ -31,6 +31,11 @@ class point:
         y = self.y + other.y
         return point(x, y)
 
+    def __sub__(self, other):
+        x = self.x - other.x
+        y = self.y - other.y
+        return point(x, y)
+
 
 class cp:
     def __init__(self, pos, id):
@@ -42,11 +47,7 @@ class vector:
     def __init__(self, vx, vy):
         self.x = vx
         self.y = vy
-
-    def get_angle(self):
         self.angle = math.atan2(self.y, self.x)
-
-    def get_velocity(self):
         self.abs = math.hypot(self.x, self.y)
 
     def get_quadrant(self):
@@ -64,31 +65,63 @@ class vector:
 class rel:
     def __init__(self, pod, cp):
         self.d = get_distance(pod.pos, cp.pos)
-        quadrant = quad_from_pos(pod.pos, cp.pos)
-
-        x_to_cp = 0
-        y_to_cp = 0
-
-        if quadrant == 1:
-            x_to_cp = cp.pos.x - pod.pos.x
-            y_to_cp = pod.pos.y - cp.pos.y
-        elif quadrant == 2:
-            x_to_cp = (pod.pos.x - cp.pos.x) * -1
-            y_to_cp = pod.pos.y - cp.pos.y
-        elif quadrant == 3:
-            x_to_cp = (pod.pos.x - cp.pos.x) * -1
-            y_to_cp = (cp.pos.y - pod.pos.y) * -1
-        elif quadrant == 4:
-            x_to_cp = cp.pos.x - pod.pos.x
-            y_to_cp = (cp.pos.y - pod.pos.y) * -1
-
-        # getting the absolute angle of the cp from the pods position
-        self.abs_angle = math.atan2(y_to_cp, x_to_cp)
-
-        self.facing_offset = get_signed_angle(self.abs_angle, pod.angle_facing)
-
+        self.parent_cp = cp
+        translation_pod_cp = get_relative_pos_from_global(pod.pos, cp.pos)
+        self.abs_angle = translation_pod_cp.angle
+        self.facing_offset = get_signed_angle(
+                                self.abs_angle, pod.angle_facing)
         self.heading_offset = get_signed_angle(
-            self.abs_angle, pod.vector.angle)
+                                self.abs_angle, pod.vector.angle)
+
+    def add_compensation_angle(self, pod, limit=1200):
+        """
+        Add compensation turning angle to the cp dictionary.
+
+        With the d to cp, and the current vector
+        heading offset, i.e. if the heading offset was 0, then
+        the pod vector would be on perfect collision course with
+        the target. Assuming that function is called when heading
+        offset is > 0. Imagine drawing a line from pod to target,
+        then draw a line from pod that is perpendicular to the
+        last line. The projection of the vector will meet this
+        perpendicular line to form a right angled triangle. This
+        meeting point is how far the current vector will overshoot
+        the target.
+
+        Use the properties of this triangle to produce a compensation to the
+        normal heading (x, y)
+        """
+
+        # how far the current heading will miss the target
+        overshoot_d = abs(
+            self.d * math.tan(abs(self.heading_offset)))
+
+        # the d between pod and the overshoot point.
+        projection_pod_vector_d = math.hypot(
+            self.d, overshoot_d)
+
+        # coordinates of overshoot relative to pod
+
+        x_overshoot = (projection_pod_vector_d *
+                       math.cos(pod.vector.angle))
+        y_overshoot = (projection_pod_vector_d *
+                       math.sin(pod.vector.angle))
+
+        # absolute values
+        global_x_overshoot = (pod.pos.x + x_overshoot)
+        global_y_overshoot = (pod.pos.y - y_overshoot)
+
+        # d between overshoot point and taget
+        global_x_cp_overshoot = (global_x_overshoot - self.parent_cp.pos.x)
+        global_y_cp_overshoot = (global_y_overshoot - self.parent_cp.pos.y)
+
+        # compensation values (point opposite target from overshoot)
+        x_compensation = max(
+                            min(int(-global_x_cp_overshoot), limit), -limit)
+        y_compensation = max(
+                            min(int(-global_y_cp_overshoot), limit), -limit)
+
+        self.compensation = point(x_compensation, y_compensation)
 
 
 class pod:
@@ -97,66 +130,15 @@ class pod:
         self.global_vector = global_vector
         self.angle_facing = angle_facing
         self.current_cp = current_cp
-
-    def get_info(self):
-        """Get info relating to pod."""
-        # Establishing target cp
         self.next_cp = cps[(current_cp.id + 1) % (cp_count)]
         self.last_cp = cps[(current_cp.id - 1) % (cp_count)]
-
         self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
-
-        self.vector.get_angle()
-        self.vector.get_velocity()
-
         self.current_cp_rel = rel(self, self.current_cp)
-
-        add_compensation_angle(self, self.current_cp, self.current_cp_rel)
-
         self.next_cp_rel = rel(self, self.next_cp)
 
-        self.get_heading()
-
-    def get_angle_to_next_cp(self):
-        """
-        Calculate where to aim to cut corner without missing target.
-
-        Using the cp after the current target, calculate where
-        in the current target, the pod should aim, so as to corner efficiently.
-        Return an x and y coordinate.
-
-        """
-
-        x_between_current_and_next_cp = (
-            self.current_cp.x - self.next_cp.x)
-        y_between_current_and_next_cp = (
-            self.current_cp.y - self.next_cp.y)
-
-        d_between_current_and_next_cp = math.hypot(
-            x_between_current_and_next_cp,
-            y_between_current_and_next_cp
-        )
-
-        x_between_pod_and_next_cp = self.next_cp.x - self.x
-        y_between_pod_and_next_cp = self.next_cp.y - self.y
-
-        d_between_pod_and_next_cp = math.hypot(
-            x_between_pod_and_next_cp,
-            y_between_pod_and_next_cp)
-
-        # law of cosines
-        self.angle_pod_current_next = math.acos(
-            (
-                d_between_pod_and_next_cp ** 2 -
-                current_cp_rel['d'] ** 2 -
-                d_between_current_and_next_cp ** 2
-            ) / (
-                -2 * current_cp_rel['d'] *
-                d_between_current_and_next_cp
-            )
-        )
-
     def get_heading(self):
+
+        self.current_cp_rel.add_compensation_angle(self)
         self.heading = point(self.current_cp.pos.x, self.current_cp.pos.y)
 
         self.thrust = 100
@@ -181,9 +163,11 @@ class pod:
 
         time_to_target = (
                 self.current_cp_rel.d / self.vector.abs)
-        # print(f"time_to_target {time_to_target}", file=sys.stderr)
-        self.get_angle_to_next_cp()
-        add_compensation_angle(self, self.next_cp, self.next_cp_rel)
+
+        self.angle_pod_current_next = get_angle_between_three_points(
+            self.pos, self.current_cp.pos, self.next_cp.pos)
+
+        self.next_cp_rel.add_compensation_angle(self)
 
         if abs(self.angle_pod_current_next) > pi * 4/5:
             print(f"full speed", file=sys.stderr)
@@ -215,10 +199,10 @@ class pod:
 
         elif abs(self.angle_pod_current_next) < pi * 1/5:
             print(f"hairpin", file=sys.stderr)
-            if time_to_target < 5:
+            if time_to_target < 6:
                 self.heading = point(self.next_cp.pos.x, self.next_cp.pos.y)
                 self.heading += self.next_cp_rel.compensation
-                self.thrust = 0
+                self.thrust = 5
 
     def get_angle_to_next_cp(self):
         """
@@ -316,57 +300,6 @@ def get_signed_angle(a1, a2):
     return diff
 
 
-def add_compensation_angle(pod, cp, cp_rel, limit=1200):
-    """
-    Add compensation turning angle to the cp dictionary.
-
-    With the d to cp, and the current vector
-    heading offset, i.e. if the heading offset was 0, then
-    the pod vector would be on perfect collision course with
-    the target. Assuming that function is called when heading
-    offset is > 0. Imagine drawing a line from pod to target,
-    then draw a line from pod that is perpendicular to the
-    last line. The projection of the vector will meet this
-    perpendicular line to form a right angled triangle. This
-    meeting point is how far the current vector will overshoot
-    the target.
-
-    Use the properties of this triangle to produce a compensation to the
-    normal heading (x, y)
-    """
-
-    # how far the current heading will miss the target
-    overshoot_d = abs(
-        cp_rel.d * math.tan(abs(cp_rel.heading_offset)))
-
-    # the d between pod and the overshoot point.
-    projection_pod_vector_d = math.hypot(
-        cp_rel.d, overshoot_d)
-
-    # coordinates of overshoot relative to pod
-
-    x_overshoot = (projection_pod_vector_d *
-                   math.cos(pod.vector.angle))
-    y_overshoot = (projection_pod_vector_d *
-                   math.sin(pod.vector.angle))
-
-    # absolute values
-    global_x_overshoot = (pod.pos.x + x_overshoot)
-    global_y_overshoot = (pod.pos.y - y_overshoot)
-
-    # d between overshoot point and taget
-    global_x_cp_overshoot = (global_x_overshoot - cp.pos.x)
-    global_y_cp_overshoot = (global_y_overshoot - cp.pos.y)
-
-    # compensation values (point opposite target from overshoot)
-    x_compensation = max(
-                        min(int(-global_x_cp_overshoot), limit), -limit)
-    y_compensation = max(
-                        min(int(-global_y_cp_overshoot), limit), -limit)
-
-    cp_rel.compensation = point(x_compensation, y_compensation)
-
-
 def facing_compensation(pod):
 
     if abs(pod.current_cp_rel.facing_offset) > pi * 4/5:
@@ -374,6 +307,46 @@ def facing_compensation(pod):
 
     elif abs(pod.current_cp_rel.facing_offset) > pi * 3/5:
         pod.thrust = 30
+
+
+def get_relative_pos_from_global(p1, p2):
+    quadrant = quad_from_pos(p1, p2)
+
+    x = 0
+    y = 0
+
+    if quadrant == 1:
+        x = p2.x - p1.x
+        y = p1.y - p2.y
+    elif quadrant == 2:
+        x = (p1.x - p2.x) * -1
+        y = p1.y - p2.y
+    elif quadrant == 3:
+        x = (p1.x - p2.x) * -1
+        y = (p2.y - p1.y) * -1
+    elif quadrant == 4:
+        x = p2.x - p1.x
+        y = (p2.y - p1.y) * -1
+
+    return vector(x, y)
+
+
+def get_angle_between_three_points(p1, p2, p3):
+
+    d_p1_p2 = get_distance(p1, p2)
+
+    d_p2_p3 = get_distance(p2, p3)
+
+    d_p1_p3 = get_distance(p1, p3)
+
+    # law of cosines
+    angle = (
+        math.acos((
+            d_p1_p3 ** 2 - d_p1_p2 ** 2 - d_p2_p3 ** 2
+            ) / (-2 * d_p1_p2 * d_p2_p3))
+        )
+
+    return angle
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -419,7 +392,8 @@ while True:
         current_cp = cps[current_cp_id]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
 
-        current_pod.get_info()
+        current_pod.get_heading()
+
 
         if i == 1 and counter < 10:
             current_pod.thrust = 10
@@ -429,8 +403,6 @@ while True:
     for i in range(2):
         # OPPONENT
         x_2, y_2, global_vx_2, global_vy_2, angle_2, current_check_point_id_2 = [int(j) for j in input().split()]
-
-        print(i, file=sys.stderr)
 
     print(f"{pods[0].heading.x} {pods[0].heading.y} {pods[0].thrust}")
     print(f"{pods[1].heading.x} {pods[1].heading.y} {pods[1].thrust}")
