@@ -36,9 +36,14 @@ class point:
         y = self.y - other.y
         return point(x, y)
 
-    def __mul__(self, other):
-        x = self.x - other
-        y = self.y - other
+    def __mul__(self, num):
+        x = self.x * num
+        y = self.y * num
+        return point(x, y)
+
+    def flip(self):
+        x = self.x * -1
+        y = self.y * -1
         return point(x, y)
 
 
@@ -84,12 +89,10 @@ class rel:
             self, pod, pod.vector.angle, pod.current_cp_rel.heading_offset)
 
         # compensation values (point opposite target from overshoot)
-        x_compensation = max(
-                            min(int(-global_overshoot.x), limit), -limit)
-        y_compensation = max(
-                            min(int(-global_overshoot.y), limit), -limit)
 
-        self.compensation = point(x_compensation, y_compensation)
+        compensation = constrain_point(global_overshoot.flip(), -limit, limit)
+
+        self.compensation = compensation
 
 
 class pod:
@@ -100,22 +103,26 @@ class pod:
         self.current_cp = current_cp
         self.next_cp = cps[(current_cp.id + 1) % (cp_count)]
         self.last_cp = cps[(current_cp.id - 1) % (cp_count)]
+        self.next_cp2 = cps[(current_cp.id + 2) % (cp_count)]
         self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
 
     def get_heading(self):
 
-        self.current_cp_rel.add_compensation_angle(self, limit=10000)
-        base_heading = self.current_cp.pos + self.current_cp_rel.compensation * 2
+        # Sets a base heading in case none of the if statements catch
+        self.current_cp_rel.add_compensation_angle(self, limit=7000)
+        base_heading = self.current_cp.pos + self.current_cp_rel.compensation
         self.heading = base_heading
         self.thrust = 100
 
+        # If far enough, boost
         if (
                 self.current_cp_rel.d > 6000 and
                 self.current_cp_rel.facing_offset < 0.1):
             self.thrust = "BOOST"
 
+        # +++ Getting info about the corner +++
         self.angle_pod_current_next = get_angle_between_three_points(
                                         self.pos,
                                         self.current_cp.pos,
@@ -127,41 +134,31 @@ class pod:
                                         self.pos,
                                         self.last_cp.pos)
 
+        # if far enough, and heading in the right direction
+        # swing out in preparation for the corner.
         if (
-                self.current_cp_rel.d > d_pod_last_cp * 2 and
-                self.current_cp_rel.heading_offset < pi/2 and
+                self.current_cp_rel.d > d_pod_last_cp * 3 and
+                self.current_cp_rel.heading_offset < pi/4 and
                 d_last_cp_current_cp > 5000):
             debug("status - prepping corner")
             self.prepare_corner()
 
+        # if heading is good, activate corner procedure
         if (
                 self.vector.abs > 0 and
                 abs(self.current_cp_rel.heading_offset) < 0.8):
             debug("status - cornering")
             self.corner()
 
+        # if facing the wrong direction, do not thrust...
         facing_compensation(self)
-
-    def next_turn_left_or_right(self):
-        g_angle_pod_current_cp = get_global_angle(
-                                    self.pos, self.current_cp.pos)
-        g_angle_pod_next_cp = get_global_angle(
-                                    self.pos, self.next_cp.pos)
-
-        angle = get_signed_angle(g_angle_pod_current_cp, g_angle_pod_next_cp)
-
-        if angle < 0:
-            return "left"
-        else:
-            return "right"
 
     def prepare_corner(self, limit=1000):
 
-        direction = self.next_turn_left_or_right()
-
-        #prep_angle = pi / 5
-        #if self.angle_pod_current_next > 0:
-        #    prep_angle *= -1
+        direction = left_or_right(
+                        self.pos,
+                        self.current_cp.pos,
+                        self.next_cp.pos)
 
         mag = pi/10
 
@@ -173,14 +170,7 @@ class pod:
         prep_heading = get_overshoot_pos(
             self.current_cp_rel, self, sim_heading, mag)
 
-        prep_heading.x = int(prep_heading.x)
-        prep_heading.y = int(prep_heading.y)
-
-        prep_heading.x = max(
-                            min(int(prep_heading.x), limit), -limit)
-        prep_heading.y = max(
-                            min(int(prep_heading.y), limit), -limit)
-
+        prep_heading = constrain_point(prep_heading, -limit, limit)
 
         self.heading = self.current_cp.pos + prep_heading
 
@@ -189,7 +179,7 @@ class pod:
         time_to_target = (self.current_cp_rel.d / self.vector.abs)
 
         self.next_cp_rel.add_compensation_angle(self, limit=2000)
-        next_heading = (self.next_cp.pos + self.next_cp_rel.compensation)
+        next_heading = (self.next_cp.pos + self.next_cp_rel.compensation * 2)
 
         if abs(self.angle_pod_current_next) > pi * 4/5:
             print(f"full speed", file=sys.stderr)
@@ -216,7 +206,7 @@ class pod:
             print(f"hard", file=sys.stderr)
             if time_to_target < 5:
                 self.heading = next_heading
-                self.thrust = 0
+                self.thrust = 20
 
         elif abs(self.angle_pod_current_next) < pi * 1/5:
             print(f"hairpin", file=sys.stderr)
@@ -235,7 +225,17 @@ def debug(var_name="", variable=""):
 
 def constrain(val, min_val, max_val):
     """Constrain value between min and max."""
-    return min(max_val, max(min_val, val))
+    val = int(min(max_val, max(min_val, val)))
+
+    return val
+
+
+def constrain_point(pos, min_val, max_val):
+
+    x = int(constrain(pos.x, min_val, max_val))
+    y = int(constrain(pos.y, min_val, max_val))
+
+    return point(x, y)
 
 
 def flip_rotation_direction(angle, type="radians"):
@@ -342,9 +342,7 @@ def get_global_angle(p1, p2):
 def get_angle_between_three_points(p1, p2, p3):
 
     d_p1_p2 = get_distance(p1, p2)
-
     d_p2_p3 = get_distance(p2, p3)
-
     d_p1_p3 = get_distance(p1, p3)
 
     # law of cosines
@@ -376,6 +374,21 @@ def get_overshoot_pos(
     global_overshoot = relative_overshoot - cp_rel.parent_cp.pos
 
     return global_overshoot
+
+
+def left_or_right(p1, p2, p3):
+
+    global_angle_p1_p2 = get_global_angle(p1, p2)
+    global_angle_p2_p3 = get_global_angle(p2, p3)
+
+    angle = get_signed_angle(global_angle_p1_p2, global_angle_p2_p3)
+
+    if angle < 0:
+        return "left"
+    else:
+        return "right"
+
+
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
