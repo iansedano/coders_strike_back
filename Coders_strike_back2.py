@@ -36,6 +36,11 @@ class point:
         y = self.y - other.y
         return point(x, y)
 
+    def __mul__(self, other):
+        x = self.x - other
+        y = self.y - other
+        return point(x, y)
+
 
 class cp:
     def __init__(self, pos, id):
@@ -73,24 +78,10 @@ class rel:
         self.heading_offset = get_signed_angle(
                                 self.abs_angle, pod.vector.angle)
 
-    def add_compensation_angle(self, pod, limit=5000):
-        """
-        With the d to cp, and the current vector
-        heading offset, i.e. if the heading offset was 0, then
-        the pod vector would be on perfect collision course with
-        the target. Assuming that function is called when heading
-        offset is > 0. Imagine drawing a line from pod to target,
-        then draw a line from pod that is perpendicular to the
-        last line. The projection of the vector will meet this
-        perpendicular line to form a right angled triangle. This
-        meeting point is how far the current vector will overshoot
-        the target.
+    def add_compensation_angle(self, pod, limit=7000):
 
-        Use the properties of this triangle to produce a compensation to the
-        normal heading (x, y)
-        """
-        global_overshoot = get_global_translation_of_projection_crossover(
-            self, pod, pod.current_cp_rel.heading_offset)
+        global_overshoot = get_overshoot_pos(
+            self, pod, pod.vector.angle, pod.current_cp_rel.heading_offset)
 
         # compensation values (point opposite target from overshoot)
         x_compensation = max(
@@ -115,26 +106,43 @@ class pod:
 
     def get_heading(self):
 
-        self.current_cp_rel.add_compensation_angle(self)
-        self.heading = self.current_cp.pos + self.current_cp_rel.compensation
-        debug("comp x", self.current_cp_rel.compensation.x)
-        debug("comp y", self.current_cp_rel.compensation.y)
+        self.current_cp_rel.add_compensation_angle(self, limit=10000)
+        base_heading = self.current_cp.pos + self.current_cp_rel.compensation * 2
+        self.heading = base_heading
         self.thrust = 100
 
         if (
-                self.current_cp_rel.d > 4000 and
-                self.current_cp_rel.facing_offset < 1):
+                self.current_cp_rel.d > 6000 and
+                self.current_cp_rel.facing_offset < 0.1):
             self.thrust = "BOOST"
+
+        self.angle_pod_current_next = get_angle_between_three_points(
+                                        self.pos,
+                                        self.current_cp.pos,
+                                        self.next_cp.pos)
+        d_last_cp_current_cp = get_distance(
+                                        self.last_cp.pos,
+                                        self.current_cp.pos)
+        d_pod_last_cp = get_distance(
+                                        self.pos,
+                                        self.last_cp.pos)
+
+        if (
+                self.current_cp_rel.d > d_pod_last_cp * 2 and
+                self.current_cp_rel.heading_offset < pi/2 and
+                d_last_cp_current_cp > 5000):
+            debug("status - prepping corner")
+            self.prepare_corner()
 
         if (
                 self.vector.abs > 0 and
-                abs(self.current_cp_rel.heading_offset) < 1):
-
+                abs(self.current_cp_rel.heading_offset) < 0.8):
+            debug("status - cornering")
             self.corner()
 
         facing_compensation(self)
 
-    def get_direction_of_next_cp(self):
+    def next_turn_left_or_right(self):
         g_angle_pod_current_cp = get_global_angle(
                                     self.pos, self.current_cp.pos)
         g_angle_pod_next_cp = get_global_angle(
@@ -147,35 +155,41 @@ class pod:
         else:
             return "right"
 
-    def prepare_corner(self):
+    def prepare_corner(self, limit=1000):
 
-        self.get_direction_of_next_cp()
+        direction = self.next_turn_left_or_right()
 
-        prep_angle = pi / 5
-        if self.angle_pod_current_next > 0:
-            prep_angle *= -1
+        #prep_angle = pi / 5
+        #if self.angle_pod_current_next > 0:
+        #    prep_angle *= -1
 
-        prep_heading = get_global_translation_of_projection_crossover(
-            self.current_cp_rel, self, pi/5)
+        mag = pi/10
+
+        if direction == "left":
+            sim_heading = self.current_cp_rel.abs_angle - mag
+        elif direction == "right":
+            sim_heading = self.current_cp_rel.abs_angle + mag
+
+        prep_heading = get_overshoot_pos(
+            self.current_cp_rel, self, sim_heading, mag)
+
+        prep_heading.x = int(prep_heading.x)
+        prep_heading.y = int(prep_heading.y)
+
+        prep_heading.x = max(
+                            min(int(prep_heading.x), limit), -limit)
+        prep_heading.y = max(
+                            min(int(prep_heading.y), limit), -limit)
+
+
+        self.heading = self.current_cp.pos + prep_heading
 
     def corner(self):
 
         time_to_target = (self.current_cp_rel.d / self.vector.abs)
 
-        self.angle_pod_current_next = get_angle_between_three_points(
-            self.pos, self.current_cp.pos, self.next_cp.pos)
-
-        self.next_cp_rel.add_compensation_angle(self)
+        self.next_cp_rel.add_compensation_angle(self, limit=2000)
         next_heading = (self.next_cp.pos + self.next_cp_rel.compensation)
-
-        d_last_cp_current_cp = get_distance(self.last_cp.pos, self.next_cp.pos)
-        half_way_point = d_last_cp_current_cp / 2
-
-        if (
-                self.current_cp_rel.d > half_way_point and
-                self.current_cp_rel.heading_offset < 1):
-
-            self.prepare_corner()
 
         if abs(self.angle_pod_current_next) > pi * 4/5:
             print(f"full speed", file=sys.stderr)
@@ -185,25 +199,28 @@ class pod:
 
         elif abs(self.angle_pod_current_next) > pi * 3/5:
             print(f"soft", file=sys.stderr)
-            if time_to_target < 5.65:
+            if time_to_target < 5.5:
                 self.heading = next_heading
                 self.thrust = 100
 
         elif abs(self.angle_pod_current_next) > pi * 2/5:
             print(f"90", file=sys.stderr)
-            if time_to_target < 4:
+            if time_to_target < 3:
                 self.heading = next_heading
-                self.thrust = 0
+                self.thrust = 100
+            elif time_to_target < 4:
+                self.heading = next_heading
+                self.thrust = 20
 
         elif abs(self.angle_pod_current_next) > pi * 1/5:
             print(f"hard", file=sys.stderr)
-            if time_to_target < 6:
+            if time_to_target < 5:
                 self.heading = next_heading
                 self.thrust = 0
 
         elif abs(self.angle_pod_current_next) < pi * 1/5:
             print(f"hairpin", file=sys.stderr)
-            if time_to_target < 6:
+            if time_to_target < 5:
                 self.heading = next_heading
                 self.thrust = 0
 
@@ -308,6 +325,8 @@ def get_global_angle(p1, p2):
 
     local_angle = math.atan2(diff.y, diff.x)
 
+    global_angle = 0
+
     if q == 1:
         global_angle = pi - local_angle
     elif q == 2:
@@ -338,8 +357,8 @@ def get_angle_between_three_points(p1, p2, p3):
     return angle
 
 
-def get_global_translation_of_projection_crossover(
-        cp_rel, pod, angle):
+def get_overshoot_pos(
+        cp_rel, pod, pod_heading, angle):
 
     d_overshoot_target = abs(cp_rel.d * math.tan(abs(angle)))
 
@@ -348,8 +367,8 @@ def get_global_translation_of_projection_crossover(
 
     # coordinates of overshoot relative to pod
 
-    x_overshoot = (d_pod_overshoot * math.cos(pod.vector.angle))
-    y_overshoot = (d_pod_overshoot * math.sin(pod.vector.angle))
+    x_overshoot = (d_pod_overshoot * math.cos(pod_heading))
+    y_overshoot = (d_pod_overshoot * math.sin(pod_heading))
 
     relative_overshoot = point(
         pod.pos.x + x_overshoot, pod.pos.y - y_overshoot)
