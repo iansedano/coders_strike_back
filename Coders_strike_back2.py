@@ -90,7 +90,7 @@ class rel:
         normal heading (x, y)
         """
         global_overshoot = get_global_translation_of_projection_crossover(
-            self, pod, pod.vector.angle)
+            self, pod, pod.current_cp_rel.heading_offset)
 
         # compensation values (point opposite target from overshoot)
         x_compensation = max(
@@ -117,7 +117,8 @@ class pod:
 
         self.current_cp_rel.add_compensation_angle(self)
         self.heading = self.current_cp.pos + self.current_cp_rel.compensation
-
+        debug("comp x", self.current_cp_rel.compensation.x)
+        debug("comp y", self.current_cp_rel.compensation.y)
         self.thrust = 100
 
         if (
@@ -133,12 +134,22 @@ class pod:
 
         facing_compensation(self)
 
-    def prepare_corner(self):
-        self.current_cp_rel.d
-        self.global_vector
-        self.current_cp_rel.d
+    def get_direction_of_next_cp(self):
+        g_angle_pod_current_cp = get_global_angle(
+                                    self.pos, self.current_cp.pos)
+        g_angle_pod_next_cp = get_global_angle(
+                                    self.pos, self.next_cp.pos)
 
-        print(f"angle {round(self.angle_pod_current_next, 3)}", file=sys.stderr )
+        angle = get_signed_angle(g_angle_pod_current_cp, g_angle_pod_next_cp)
+
+        if angle < 0:
+            return "left"
+        else:
+            return "right"
+
+    def prepare_corner(self):
+
+        self.get_direction_of_next_cp()
 
         prep_angle = pi / 5
         if self.angle_pod_current_next > 0:
@@ -196,49 +207,13 @@ class pod:
                 self.heading = next_heading
                 self.thrust = 0
 
-
-
-    def get_angle_to_next_cp(self):
-        """
-        Calculate where to aim to cut corner without missing target.
-
-        Using the cp after the current target, calculate where
-        in the current target, the pod should aim, so as to corner efficiently.
-        Return an x and y coordinate.
-
-        """
-        x_between_current_and_next_cp = (
-            self.current_cp.pos.x - self.next_cp.pos.x)
-        y_between_current_and_next_cp = (
-            self.current_cp.pos.y - self.next_cp.pos.y)
-
-        d_between_current_and_next_cp = math.hypot(
-            x_between_current_and_next_cp,
-            y_between_current_and_next_cp
-        )
-
-        x_between_pod_and_next_cp = self.next_cp.pos.x - self.pos.x
-        y_between_pod_and_next_cp = self.next_cp.pos.y - self.pos.y
-
-        d_between_pod_and_next_cp = math.hypot(
-            x_between_pod_and_next_cp,
-            y_between_pod_and_next_cp)
-
-        # law of cosines
-        self.angle_pod_current_next = math.acos(
-            (
-                d_between_pod_and_next_cp ** 2 -
-                self.current_cp_rel.d ** 2 -
-                d_between_current_and_next_cp ** 2
-            ) / (
-                -2 * self.current_cp_rel.d *
-                d_between_current_and_next_cp
-            )
-        )
-
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++++FUNCTIONS++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+def debug(var_name="", variable=""):
+    print(f"{var_name}, {variable}", file=sys.stderr)
 
 
 def constrain(val, min_val, max_val):
@@ -271,7 +246,7 @@ def get_distance(point1, point2):
     return d
 
 
-def quad_from_pos(origin, target):
+def find_quadrant(origin, target):
     """Get the target quadrant from an x and y position."""
     if target.x > origin.x and target.y < origin.y:
         return 1
@@ -304,7 +279,7 @@ def facing_compensation(pod):
 
 
 def get_relative_pos_from_global(p1, p2):
-    quadrant = quad_from_pos(p1, p2)
+    quadrant = find_quadrant(p1, p2)
 
     x = 0
     y = 0
@@ -323,6 +298,26 @@ def get_relative_pos_from_global(p1, p2):
         y = (p2.y - p1.y) * -1
 
     return vector(x, y)
+
+
+def get_global_angle(p1, p2):
+    d = get_distance(p1, p2)
+    q = find_quadrant(p1, p2)
+
+    diff = p1 - p2
+
+    local_angle = math.atan2(diff.y, diff.x)
+
+    if q == 1:
+        global_angle = pi - local_angle
+    elif q == 2:
+        global_angle = pi - local_angle
+    elif q == 3:
+        global_angle = -pi - local_angle
+    elif q == 4:
+        global_angle = -pi - local_angle
+
+    return global_angle
 
 
 def get_angle_between_three_points(p1, p2, p3):
@@ -395,7 +390,7 @@ while True:
 
         x, y, global_vx, global_vy, angle_facing, current_cp_id = [
             int(j) for j in input().split()]
-
+        print(f"pod {i}", end=" ", file=sys.stderr)
         angle_facing = flip_rotation_direction(angle_facing, "degrees")
 
         angle_facing += 5  # original angle seems to be off by 5 degrees
@@ -408,7 +403,6 @@ while True:
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
 
         current_pod.get_heading()
-
 
         if i == 1 and counter < 10:
             current_pod.thrust = 10
