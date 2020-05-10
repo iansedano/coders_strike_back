@@ -21,6 +21,22 @@ import math
 pi = 3.14159
 
 
+# +++++ RACE PARAMETERS +++++
+
+default_comp_lim = 7000
+base_heading_comp_lim = 7000
+
+# BOOST parameters
+base_heading_comp_multiplier = 1
+min_d_for_boost = 6000
+
+# corner prep
+d_from_last_cp_before_prep = 1000
+
+
+
+# +++++
+
 class point:
     def __init__(self, x, y):
         self.x = x
@@ -137,6 +153,7 @@ class pod:
         # if far enough, and heading in the right direction
         # swing out in preparation for the corner.
         if (
+                d_pod_last_cp > 1000 and
                 self.current_cp_rel.d > d_pod_last_cp * 3 and
                 self.current_cp_rel.heading_offset < pi/4 and
                 d_last_cp_current_cp > 5000):
@@ -153,7 +170,7 @@ class pod:
         # if facing the wrong direction, do not thrust...
         facing_compensation(self)
 
-    def prepare_corner(self, limit=1000):
+    def prepare_corner(self, limit=5000):
 
         direction = left_or_right(
                         self.pos,
@@ -178,12 +195,12 @@ class pod:
 
         time_to_target = (self.current_cp_rel.d / self.vector.abs)
 
-        self.next_cp_rel.add_compensation_angle(self, limit=2000)
+        self.next_cp_rel.add_compensation_angle(self, limit=10000)
         next_heading = (self.next_cp.pos + self.next_cp_rel.compensation * 2)
 
         if abs(self.angle_pod_current_next) > pi * 4/5:
             print(f"full speed", file=sys.stderr)
-            if time_to_target < 6:
+            if time_to_target < 5.5:
                 self.heading = next_heading
                 self.thrust = 100
 
@@ -195,16 +212,19 @@ class pod:
 
         elif abs(self.angle_pod_current_next) > pi * 2/5:
             print(f"90", file=sys.stderr)
-            if time_to_target < 3:
+            if time_to_target < 4:
                 self.heading = next_heading
                 self.thrust = 100
-            elif time_to_target < 4:
+            elif time_to_target < 5:
                 self.heading = next_heading
                 self.thrust = 20
 
         elif abs(self.angle_pod_current_next) > pi * 1/5:
             print(f"hard", file=sys.stderr)
-            if time_to_target < 5:
+            if time_to_target < 3.5:
+                self.heading = next_heading
+                self.thrust = 100
+            elif time_to_target < 5.55:
                 self.heading = next_heading
                 self.thrust = 20
 
@@ -214,13 +234,22 @@ class pod:
                 self.heading = next_heading
                 self.thrust = 0
 
+    def predict_next_pos(self):
+
+        new_x = self.pos.x + self.global_vector.x
+        new_y = self.pos.y + self.global_vector.y
+
+        self.next_pos = point(new_x, new_y)
+
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++++FUNCTIONS++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
 def debug(var_name="", variable=""):
-    print(f"{var_name}, {variable}", file=sys.stderr)
+    # print(f"{var_name}, {variable}", file=sys.stderr)
+    pass
 
 
 def constrain(val, min_val, max_val):
@@ -397,12 +426,9 @@ def left_or_right(p1, p2, p3):
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
-pods = {
-    0: {},
-    1: {},
-    2: {},
-    3: {}
-}
+pods = {}
+
+enemy_pods = {}
 
 laps = int(input())
 cp_count = int(input())
@@ -433,7 +459,7 @@ while True:
         pod_vector = vector(global_vx, global_vy)
         current_cp = cps[current_cp_id]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
-
+        current_pod.predict_next_pos()
         current_pod.get_heading()
 
         if i == 1 and counter < 10:
@@ -444,6 +470,36 @@ while True:
     for i in range(2):
         # OPPONENT
         x_2, y_2, global_vx_2, global_vy_2, angle_2, current_check_point_id_2 = [int(j) for j in input().split()]
+
+        print(f"enemy_pod {i}", file=sys.stderr)
+        angle_facing = flip_rotation_direction(angle_2, "degrees")
+
+        angle_facing += 5  # original angle seems to be off by 5 degrees
+        angle_facing = change_angle_scale_to_180(angle_facing)
+        angle_facing_in_rads = degree_to_rads(angle_facing)
+
+        pod_pos = point(x_2, y_2)
+        pod_vector = vector(global_vx_2, global_vy_2)
+        current_cp = cps[current_check_point_id_2]
+        current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
+        current_pod.predict_next_pos()
+        enemy_pods[i] = current_pod
+
+    # collisions
+    collision_rg = 900
+    for p in pods.keys():
+        print(f"pod: {p} ", file=sys.stderr)
+        for ep in enemy_pods.keys():
+            x_diff = abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x)
+            y_diff = abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y)
+            print(f"ep: {ep}  ", end='', file=sys.stderr)
+            print(f"x diff: {x_diff}", end=' ', file=sys.stderr)
+            print(f"y diff: {y_diff}", file=sys.stderr)
+            if (
+                    abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x) < collision_rg and
+                    abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y) < collision_rg):
+                if pods[p].vector.abs > 0:
+                    pods[p].thrust = "SHIELD"
 
     print(f"{pods[0].heading.x} {pods[0].heading.y} {pods[0].thrust}")
     print(f"{pods[1].heading.x} {pods[1].heading.y} {pods[1].thrust}")
