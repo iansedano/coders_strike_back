@@ -135,7 +135,7 @@ class pod:
         # If far enough, boost
         if (
                 self.current_cp_rel.d > 6000 and
-                self.current_cp_rel.facing_offset < 0.1):
+                abs(self.current_cp_rel.facing_offset) < 0.1):
             self.thrust = "BOOST"
 
         # +++ Getting info about the corner +++
@@ -440,7 +440,7 @@ for i in range(cp_count):
     cps[i] = cp(cp_pos, i)
 
 counter = 0
-
+last_shield_activation = [0, 0]
 
 while True:
     counter += 1
@@ -462,7 +462,7 @@ while True:
         current_pod.predict_next_pos()
         current_pod.get_heading()
 
-        if i == 1 and counter < 10:
+        if i == 1 and counter < 20:
             current_pod.thrust = 10
 
         pods[i] = current_pod
@@ -485,21 +485,23 @@ while True:
         current_pod.predict_next_pos()
         enemy_pods[i] = current_pod
 
+
     # collisions
-    collision_rg = 900
-    for p in pods.keys():
-        print(f"pod: {p} ", file=sys.stderr)
-        for ep in enemy_pods.keys():
-            x_diff = abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x)
-            y_diff = abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y)
-            print(f"ep: {ep}  ", end='', file=sys.stderr)
-            print(f"x diff: {x_diff}", end=' ', file=sys.stderr)
-            print(f"y diff: {y_diff}", file=sys.stderr)
-            if (
-                    abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x) < collision_rg and
-                    abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y) < collision_rg):
-                if pods[p].vector.abs > 0:
-                    pods[p].thrust = "SHIELD"
+    collision_rg = 850
+    if counter > 10:
+        for p in pods.keys():
+            print(f"pod: {p} ", file=sys.stderr)
+            print(f"counter: {counter} ", file=sys.stderr)
+            print(f"last_shield_activation: {last_shield_activation[p]} ", file=sys.stderr)
+            for ep in enemy_pods.keys():
+                x_diff = abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x)
+                y_diff = abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y)
+                if (
+                        abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x) < collision_rg and
+                        abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y) < collision_rg):
+                    if counter - last_shield_activation[p] > 3:
+                        pods[p].thrust = "SHIELD"
+                        last_shield_activation[p] = counter
 
     print(f"{pods[0].heading.x} {pods[0].heading.y} {pods[0].thrust}")
     print(f"{pods[1].heading.x} {pods[1].heading.y} {pods[1].thrust}")
