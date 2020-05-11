@@ -123,6 +123,7 @@ class pod:
         self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
+        self.thrust = 100
 
     def get_heading(self):
 
@@ -459,11 +460,12 @@ while True:
         pod_vector = vector(global_vx, global_vy)
         current_cp = cps[current_cp_id]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
-        current_pod.predict_next_pos()
         current_pod.get_heading()
-
-        if i == 1 and counter < 20:
+        
+        if i == 1 and counter < 10:
             current_pod.thrust = 10
+
+        current_pod.predict_next_pos()
 
         pods[i] = current_pod
 
@@ -487,7 +489,7 @@ while True:
 
 
     # collisions
-    collision_rg = 850
+    collision_rg = 700
     if counter > 10:
         for p in pods.keys():
             print(f"pod: {p} ", file=sys.stderr)
@@ -499,7 +501,7 @@ while True:
                 if (
                         abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x) < collision_rg and
                         abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y) < collision_rg):
-                    if counter - last_shield_activation[p] > 3:
+                    if counter - last_shield_activation[p] > 15:
                         pods[p].thrust = "SHIELD"
                         last_shield_activation[p] = counter
 
