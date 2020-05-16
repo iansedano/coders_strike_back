@@ -21,21 +21,11 @@ import math
 pi = 3.14159
 
 
-# +++++ RACE PARAMETERS +++++
-
-default_comp_lim = 7000
-base_heading_comp_lim = 7000
-
-# BOOST parameters
-base_heading_comp_multiplier = 1
-min_d_for_boost = 6000
-
-# corner prep
-d_from_last_cp_before_prep = 1000
 
 
-
-# +++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++CLASSES++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 class point:
     def __init__(self, x, y):
@@ -63,7 +53,7 @@ class point:
         return point(x, y)
 
 
-class cp:
+class cp:  # Checkpoint
     def __init__(self, pos, id):
         self.pos = pos
         self.id = id
@@ -106,9 +96,11 @@ class rel:
 
         # compensation values (point opposite target from overshoot)
 
-        compensation = constrain_point(global_overshoot.flip(), -limit, limit)
+        self.compensation = constrain_point(global_overshoot.flip(), -limit, limit)
 
-        self.compensation = compensation
+    def compensated_heading(self):
+
+        return self.parent_cp.pos + self.compensation
 
 
 class pod:
@@ -128,18 +120,20 @@ class pod:
     def get_heading(self):
 
         # Sets a base heading in case none of the if statements catch
-        self.current_cp_rel.add_compensation_angle(self, limit=7000)
-        base_heading = self.current_cp.pos + self.current_cp_rel.compensation
+        self.current_cp_rel.add_compensation_angle(self, limit=5000)
+        base_heading = self.current_cp_rel.compensated_heading()
         self.heading = base_heading
         self.thrust = 100
 
+        # +++++++ HEADING ALGORITHM +++++
+        
         # If far enough, boost
         if (
                 self.current_cp_rel.d > 6000 and
                 abs(self.current_cp_rel.facing_offset) < 0.1):
             self.thrust = "BOOST"
 
-        # +++ Getting info about the corner +++
+        # +++ Getting info about the corner to take+++
         self.angle_pod_current_next = get_angle_between_three_points(
                                         self.pos,
                                         self.current_cp.pos,
@@ -154,22 +148,22 @@ class pod:
         # if far enough, and heading in the right direction
         # swing out in preparation for the corner.
         if (
-                d_pod_last_cp > 1000 and
+                # d_pod_last_cp > 1000 and
                 self.current_cp_rel.d > d_pod_last_cp * 3 and
                 self.current_cp_rel.heading_offset < pi/4 and
                 d_last_cp_current_cp > 5000):
             debug("status - prepping corner")
-            self.prepare_corner()
+            self.heading = self.prepare_corner()
 
         # if heading is good, activate corner procedure
         if (
                 self.vector.abs > 0 and
-                abs(self.current_cp_rel.heading_offset) < 0.8):
+                abs(self.current_cp_rel.heading_offset) < 0.7):
             debug("status - cornering")
             self.corner()
 
         # if facing the wrong direction, do not thrust...
-        facing_compensation(self)
+        # facing_compensation(self)
 
     def prepare_corner(self, limit=5000):
 
@@ -178,7 +172,7 @@ class pod:
                         self.current_cp.pos,
                         self.next_cp.pos)
 
-        mag = pi/10
+        mag = pi/10 # magnitude of compensation move
 
         if direction == "left":
             sim_heading = self.current_cp_rel.abs_angle - mag
@@ -190,20 +184,26 @@ class pod:
 
         prep_heading = constrain_point(prep_heading, -limit, limit)
 
-        self.heading = self.current_cp.pos + prep_heading
+        new_heading = self.current_cp.pos + prep_heading
+
+        return new_heading
 
     def corner(self):
 
         time_to_target = (self.current_cp_rel.d / self.vector.abs)
 
-        self.next_cp_rel.add_compensation_angle(self, limit=10000)
-        next_heading = (self.next_cp.pos + self.next_cp_rel.compensation * 2)
+        self.next_cp_rel.add_compensation_angle(self, limit=5000)
+
+        #next_heading = self.next_cp_rel.compensated_heading()
+        next_heading = self.next_cp.pos
+
+        debug(self.current_cp_rel.heading_offset)
 
         if abs(self.angle_pod_current_next) > pi * 4/5:
             print(f"full speed", file=sys.stderr)
             if time_to_target < 5.5:
                 self.heading = next_heading
-                self.thrust = 100
+                self.thrust = "BOOST"
 
         elif abs(self.angle_pod_current_next) > pi * 3/5:
             print(f"soft", file=sys.stderr)
@@ -213,19 +213,19 @@ class pod:
 
         elif abs(self.angle_pod_current_next) > pi * 2/5:
             print(f"90", file=sys.stderr)
-            if time_to_target < 4:
+            if time_to_target < 4.5:
                 self.heading = next_heading
                 self.thrust = 100
-            elif time_to_target < 5:
+            elif time_to_target < 5.5:
                 self.heading = next_heading
-                self.thrust = 20
+                self.thrust = 10
 
         elif abs(self.angle_pod_current_next) > pi * 1/5:
             print(f"hard", file=sys.stderr)
-            if time_to_target < 3.5:
+            if time_to_target < 3.05:
                 self.heading = next_heading
                 self.thrust = 100
-            elif time_to_target < 5.55:
+            elif time_to_target < 5.5:
                 self.heading = next_heading
                 self.thrust = 20
 
@@ -249,8 +249,8 @@ class pod:
 
 
 def debug(var_name="", variable=""):
-    # print(f"{var_name}, {variable}", file=sys.stderr)
-    pass
+    print(f"{var_name}, {variable}", file=sys.stderr)
+    
 
 
 def constrain(val, min_val, max_val):
@@ -462,8 +462,8 @@ while True:
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
         current_pod.get_heading()
         
-        if i == 1 and counter < 10:
-            current_pod.thrust = 10
+        #if i == 1 and counter < 10:
+        #    current_pod.thrust = 10
 
         current_pod.predict_next_pos()
 
