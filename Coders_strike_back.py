@@ -1,184 +1,509 @@
+"""
+Coders Strike back Gold League Bot.
+
+Currently standing in at around 960th place in gold league.
+
+All angles in radians where possible in scale of pi to -pi
+
+cp = cp
+rel = relation
+agl = angle
+d = d
+
+
+"""
 import sys
 import math
 
-# Auto-generated code below aims at helping you parse
-# the standard input according to the problem statement.
+# for vector math refernce.
+# https://www.oreilly.com/library/view/machine-learning-with/9781491989371/ch01.html
 
-#next_checkpoint_tracker = next_checkpoint_dist
+pi = 3.14159
 
-# while next_checkpoint_dist == next_checkpoint_dist
 
-# game loop
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++CLASSES++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+class point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        x = self.x + other.x
+        y = self.y + other.y
+        return point(x, y)
+
+    def __sub__(self, other):
+        x = self.x - other.x
+        y = self.y - other.y
+        return point(x, y)
+
+    def __mul__(self, num):
+        x = self.x * num
+        y = self.y * num
+        return point(x, y)
+
+    def flip(self):
+        x = self.x * -1
+        y = self.y * -1
+        return point(x, y)
+
+
+class cp:  # Checkpoint
+    def __init__(self, pos, id):
+        self.pos = pos
+        self.id = id
+
+
+class vector:
+    def __init__(self, vx, vy):
+        self.x = vx
+        self.y = vy
+        self.angle = math.atan2(self.y, self.x)
+        self.abs = math.hypot(self.x, self.y)
+
+    def get_quadrant(self):
+        """Get the quadrant a vector is facing."""
+        if self.x > 0 and self.y > 0:
+            self.quadrant = 1
+        elif self.x < 0 and self.y > 0:
+            self.quadrant = 2
+        elif self.x < 0 and self.y < 0:
+            self.quadrant = 3
+        elif self.x > 0 and self.y < 0:
+            self.quadrant = 4
+
+
+class rel:
+    def __init__(self, pod, cp):
+        self.d = get_distance(pod.pos, cp.pos)
+        self.parent_cp = cp
+        translation_pod_cp = get_relative_pos_from_global(pod.pos, cp.pos)
+        self.abs_angle = translation_pod_cp.angle
+        self.facing_offset = get_signed_angle(
+                                self.abs_angle, pod.angle_facing)
+        self.heading_offset = get_signed_angle(
+                                self.abs_angle, pod.vector.angle)
+
+    def add_compensation_angle(self, pod, limit=7000):
+
+        global_overshoot = get_overshoot_pos(
+            self, pod, pod.vector.angle, pod.current_cp_rel.heading_offset)
+
+        # compensation values (point opposite target from overshoot)
+
+        self.compensation = constrain_point(global_overshoot.flip(), -limit, limit)
+
+    def compensated_heading(self):
+
+        return self.parent_cp.pos + self.compensation
+
+
+class pod:
+    def __init__(self, pos, global_vector, angle_facing, current_cp):
+        self.pos = pos
+        self.global_vector = global_vector
+        self.angle_facing = angle_facing
+        self.current_cp = current_cp
+        self.next_cp = cps[(current_cp.id + 1) % (cp_count)]
+        self.last_cp = cps[(current_cp.id - 1) % (cp_count)]
+        self.next_cp2 = cps[(current_cp.id + 2) % (cp_count)]
+        self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
+        self.current_cp_rel = rel(self, self.current_cp)
+        self.next_cp_rel = rel(self, self.next_cp)
+        self.thrust = 100
+
+    def get_heading(self):
+
+        # Sets a base heading in case none of the if statements catch
+        self.current_cp_rel.add_compensation_angle(self, limit=5000)
+        base_heading = self.current_cp_rel.compensated_heading()
+        self.heading = base_heading
+        self.thrust = 100
+
+        # +++++++ HEADING ALGORITHM +++++
+        
+        # If far enough, boost
+        if (
+                self.current_cp_rel.d > 6000 and
+                abs(self.current_cp_rel.facing_offset) < 0.1):
+            self.thrust = "BOOST"
+
+        # +++ Getting info about the corner to take+++
+        self.angle_pod_current_next = get_angle_between_three_points(
+                                        self.pos,
+                                        self.current_cp.pos,
+                                        self.next_cp.pos)
+        d_last_cp_current_cp = get_distance(
+                                        self.last_cp.pos,
+                                        self.current_cp.pos)
+        d_pod_last_cp = get_distance(
+                                        self.pos,
+                                        self.last_cp.pos)
+
+        # if far enough, and heading in the right direction
+        # swing out in preparation for the corner.
+        if (
+                # d_pod_last_cp > 1000 and
+                self.current_cp_rel.d > d_pod_last_cp * 3 and
+                self.current_cp_rel.heading_offset < pi/4 and
+                d_last_cp_current_cp > 5000):
+            debug("status - prepping corner")
+            self.heading = self.prepare_corner()
+
+        # if heading is good, activate corner procedure
+        if (
+                self.vector.abs > 0 and
+                abs(self.current_cp_rel.heading_offset) < 0.7):
+            debug("status - cornering")
+            self.corner()
+
+        # if facing the wrong direction, do not thrust...
+        # facing_compensation(self)
+
+    def prepare_corner(self, limit=5000):
+
+        direction = left_or_right(
+                        self.pos,
+                        self.current_cp.pos,
+                        self.next_cp.pos)
+
+        mag = pi/10 # magnitude of compensation move
+
+        if direction == "left":
+            sim_heading = self.current_cp_rel.abs_angle - mag
+        elif direction == "right":
+            sim_heading = self.current_cp_rel.abs_angle + mag
+
+        prep_heading = get_overshoot_pos(
+            self.current_cp_rel, self, sim_heading, mag)
+
+        prep_heading = constrain_point(prep_heading, -limit, limit)
+
+        new_heading = self.current_cp.pos + prep_heading
+
+        return new_heading
+
+    def corner(self):
+
+        time_to_target = (self.current_cp_rel.d / self.vector.abs)
+
+        self.next_cp_rel.add_compensation_angle(self, limit=5000)
+
+        #next_heading = self.next_cp_rel.compensated_heading()
+        next_heading = self.next_cp.pos
+
+        debug(self.current_cp_rel.heading_offset)
+
+        if abs(self.angle_pod_current_next) > pi * 4/5:
+            print(f"full speed", file=sys.stderr)
+            if time_to_target < 5.5:
+                self.heading = next_heading
+                self.thrust = "BOOST"
+
+        elif abs(self.angle_pod_current_next) > pi * 3/5:
+            print(f"soft", file=sys.stderr)
+            if time_to_target < 5.5:
+                self.heading = next_heading
+                self.thrust = 100
+
+        elif abs(self.angle_pod_current_next) > pi * 2/5:
+            print(f"90", file=sys.stderr)
+            if time_to_target < 4.5:
+                self.heading = next_heading
+                self.thrust = 100
+            elif time_to_target < 5.5:
+                self.heading = next_heading
+                self.thrust = 10
+
+        elif abs(self.angle_pod_current_next) > pi * 1/5:
+            print(f"hard", file=sys.stderr)
+            if time_to_target < 3.05:
+                self.heading = next_heading
+                self.thrust = 100
+            elif time_to_target < 5.5:
+                self.heading = next_heading
+                self.thrust = 20
+
+        elif abs(self.angle_pod_current_next) < pi * 1/5:
+            print(f"hairpin", file=sys.stderr)
+            if time_to_target < 5:
+                self.heading = next_heading
+                self.thrust = 0
+
+    def predict_next_pos(self):
+
+        new_x = self.pos.x + self.global_vector.x
+        new_y = self.pos.y + self.global_vector.y
+
+        self.next_pos = point(new_x, new_y)
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++FUNCTIONS++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+def debug(var_name="", variable=""):
+    print(f"{var_name}, {variable}", file=sys.stderr)
+    
+
+
+def constrain(val, min_val, max_val):
+    """Constrain value between min and max."""
+    val = int(min(max_val, max(min_val, val)))
+
+    return val
+
+
+def constrain_point(pos, min_val, max_val):
+
+    x = int(constrain(pos.x, min_val, max_val))
+    y = int(constrain(pos.y, min_val, max_val))
+
+    return point(x, y)
+
+
+def flip_rotation_direction(angle, type="radians"):
+    if type == "degrees":
+        angle = (-angle) % 360
+    elif type == "radians":
+        angle = (-angle) % pi
+    return angle
+
+
+def change_angle_scale_to_180(angle):
+    angle = (angle - 180) % 360 - 180
+    return angle
+
+
+def degree_to_rads(angle):
+    angle = angle * (pi / 180)
+    return angle
+
+
+def get_distance(point1, point2):
+    x = point2.x - point1.x
+    y = point2.y - point1.y
+    d = math.hypot(x, y)
+    return d
+
+
+def find_quadrant(origin, target):
+    """Get the target quadrant from an x and y position."""
+    if target.x > origin.x and target.y < origin.y:
+        return 1
+    elif target.x < origin.x and target.y < origin.y:
+        return 2
+    elif target.x < origin.x and target.y > origin.y:
+        return 3
+    elif target.x > origin.x and target.y > origin.y:
+        return 4
+
+
+def get_signed_angle(a1, a2):
+
+    diff = a1 - a2
+    if diff > pi:
+        diff -= pi*2
+    if diff < -pi:
+        diff += pi*2
+
+    return diff
+
+
+def facing_compensation(pod):
+
+    if abs(pod.current_cp_rel.facing_offset) > pi * 4/5:
+        pod.thrust = 20
+
+    elif abs(pod.current_cp_rel.facing_offset) > pi * 3/5:
+        pod.thrust = 30
+
+
+def get_relative_pos_from_global(p1, p2):
+    quadrant = find_quadrant(p1, p2)
+
+    x = 0
+    y = 0
+
+    if quadrant == 1:
+        x = p2.x - p1.x
+        y = p1.y - p2.y
+    elif quadrant == 2:
+        x = (p1.x - p2.x) * -1
+        y = p1.y - p2.y
+    elif quadrant == 3:
+        x = (p1.x - p2.x) * -1
+        y = (p2.y - p1.y) * -1
+    elif quadrant == 4:
+        x = p2.x - p1.x
+        y = (p2.y - p1.y) * -1
+
+    return vector(x, y)
+
+
+def get_global_angle(p1, p2):
+    d = get_distance(p1, p2)
+    q = find_quadrant(p1, p2)
+
+    diff = p1 - p2
+
+    local_angle = math.atan2(diff.y, diff.x)
+
+    global_angle = 0
+
+    if q == 1:
+        global_angle = pi - local_angle
+    elif q == 2:
+        global_angle = pi - local_angle
+    elif q == 3:
+        global_angle = -pi - local_angle
+    elif q == 4:
+        global_angle = -pi - local_angle
+
+    return global_angle
+
+
+def get_angle_between_three_points(p1, p2, p3):
+
+    d_p1_p2 = get_distance(p1, p2)
+    d_p2_p3 = get_distance(p2, p3)
+    d_p1_p3 = get_distance(p1, p3)
+
+    # law of cosines
+    angle = (
+        math.acos((
+            d_p1_p3 ** 2 - d_p1_p2 ** 2 - d_p2_p3 ** 2
+            ) / (-2 * d_p1_p2 * d_p2_p3))
+        )
+
+    return angle
+
+
+def get_overshoot_pos(
+        cp_rel, pod, pod_heading, angle):
+
+    d_overshoot_target = abs(cp_rel.d * math.tan(abs(angle)))
+
+    # the d between pod and the overshoot point.
+    d_pod_overshoot = math.hypot(cp_rel.d, d_overshoot_target)
+
+    # coordinates of overshoot relative to pod
+
+    x_overshoot = (d_pod_overshoot * math.cos(pod_heading))
+    y_overshoot = (d_pod_overshoot * math.sin(pod_heading))
+
+    relative_overshoot = point(
+        pod.pos.x + x_overshoot, pod.pos.y - y_overshoot)
+
+    global_overshoot = relative_overshoot - cp_rel.parent_cp.pos
+
+    return global_overshoot
+
+
+def left_or_right(p1, p2, p3):
+
+    global_angle_p1_p2 = get_global_angle(p1, p2)
+    global_angle_p2_p3 = get_global_angle(p2, p3)
+
+    angle = get_signed_angle(global_angle_p1_p2, global_angle_p2_p3)
+
+    if angle < 0:
+        return "left"
+    else:
+        return "right"
+
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++GAME LOOP++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+pods = {}
+
+enemy_pods = {}
+
+laps = int(input())
+cp_count = int(input())
+
+cps = {}
+for i in range(cp_count):
+    cp_x, cp_y = [int(j) for j in input().split()]
+    cp_pos = point(cp_x, cp_y)
+    cps[i] = cp(cp_pos, i)
 
 counter = 0
-
-lastx = 0
-lasty = 0
-dx = 0
-dy = 0
-
-checkpoints = []
-
-
-def pp_angle(a):
-    new_a = a
-    if a < 0:
-        new_a = a + 360
-    return new_a
-
+last_shield_activation = [0, 0]
 
 while True:
     counter += 1
+    for i in range(2):
 
-    x, y, next_checkpoint_x, next_checkpoint_y, next_checkpoint_dist, next_checkpoint_angle = [
-        int(i) for i in input().split()]
-    opponent_x, opponent_y = [int(i) for i in input().split()]
+        x, y, global_vx, global_vy, angle_facing, current_cp_id = [
+            int(j) for j in input().split()]
+        print(f"pod {i}", end=" ", file=sys.stderr)
+        angle_facing = flip_rotation_direction(angle_facing, "degrees")
 
-    if counter > 1:
-        dx = x - lastx
-        dy = y - lasty
-    lastx = x
-    lasty = y
+        angle_facing += 5  # original angle seems to be off by 5 degrees
+        angle_facing = change_angle_scale_to_180(angle_facing)
+        angle_facing_in_rads = degree_to_rads(angle_facing)
 
-    vector_mag = (dx**2 + dy**2)**0.5
-    # N: -90  S: 90  W: 180 / -180 E: 0
-    vector_heading = math.atan2(dy, dx) / math.pi * 180
-    vector_heading = pp_angle(vector_heading)
+        pod_pos = point(x, y)
+        pod_vector = vector(global_vx, global_vy)
+        current_cp = cps[current_cp_id]
+        current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
+        current_pod.get_heading()
+        
+        #if i == 1 and counter < 10:
+        #    current_pod.thrust = 10
 
-    x_ship_to_target = next_checkpoint_x - x
-    y_ship_to_target = next_checkpoint_y - y
+        current_pod.predict_next_pos()
 
-    angle_to_target = math.atan2(
-        y_ship_to_target, x_ship_to_target) / math.pi * 180
-    angle_to_target = pp_angle(angle_to_target)
+        pods[i] = current_pod
 
-    angle_diff = 0
-    angle_diff = angle_to_target - vector_heading
-    angle_diff = (angle_diff + 180) % 360 - 180
+    for i in range(2):
+        # OPPONENT
+        x_2, y_2, global_vx_2, global_vy_2, angle_2, current_check_point_id_2 = [int(j) for j in input().split()]
 
-    # predicting next position
+        print(f"enemy_pod {i}", file=sys.stderr)
+        angle_facing = flip_rotation_direction(angle_2, "degrees")
 
-    next_x = x + dx
-    next_y = y + dy
+        angle_facing += 5  # original angle seems to be off by 5 degrees
+        angle_facing = change_angle_scale_to_180(angle_facing)
+        angle_facing_in_rads = degree_to_rads(angle_facing)
 
-    # THRUSTING
+        pod_pos = point(x_2, y_2)
+        pod_vector = vector(global_vx_2, global_vy_2)
+        current_cp = cps[current_check_point_id_2]
+        current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
+        current_pod.predict_next_pos()
+        enemy_pods[i] = current_pod
 
-    thrust = 100
-    thrustMultiplier = 1
 
-    # angle multi
-    angleMultiplier = 1
+    # collisions
+    collision_rg = 700
+    if counter > 10:
+        for p in pods.keys():
+            print(f"pod: {p} ", file=sys.stderr)
+            print(f"counter: {counter} ", file=sys.stderr)
+            print(f"last_shield_activation: {last_shield_activation[p]} ", file=sys.stderr)
+            for ep in enemy_pods.keys():
+                x_diff = abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x)
+                y_diff = abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y)
+                if (
+                        abs(pods[p].next_pos.x - enemy_pods[ep].next_pos.x) < collision_rg and
+                        abs(pods[p].next_pos.y - enemy_pods[ep].next_pos.y) < collision_rg):
+                    if counter - last_shield_activation[p] > 15:
+                        pods[p].thrust = "SHIELD"
+                        last_shield_activation[p] = counter
 
-    if abs(next_checkpoint_angle) > 90:
-        angleMultiplier = 0
-    elif abs(next_checkpoint_angle) <= 90 and abs(next_checkpoint_angle) >= 40:
-        angleMultiplier = (abs(next_checkpoint_angle) - 90) / -50
-    elif abs(next_checkpoint_angle) < 50:
-        angleMultiplier = 1
-
-    # distance multi
-
-    distToStartTurn = 1500
-    distMultiplier = (next_checkpoint_dist / distToStartTurn) ** 3
-
-    if next_checkpoint_dist > 6000 and abs(next_checkpoint_angle) < 5 and counter > 20:
-        thrust = "BOOST"
-
-    elif next_checkpoint_dist < distToStartTurn:
-        thrustMultiplier = thrustMultiplier * distMultiplier
-
-   # if isinstance(thrustMultiplier, complex):
-   #     thrustMultiplier = 0.1
-
-    if thrustMultiplier > 0.8:
-        thrustMultiplier = 1
-    if thrustMultiplier < 0.7:
-        thrustMultiplier = 0.7
-
-    if next_checkpoint_dist < 5000 or abs(next_checkpoint_angle) > 120:
-        thrustMultiplier = thrustMultiplier * angleMultiplier
-
-    if thrust != "BOOST":
-        thrust = int(thrust * thrustMultiplier)
-
-    if abs(angle_diff) > 100 and abs(next_checkpoint_angle) > 90 and abs(vector_mag) > 300:
-        thrust = 0
-    elif abs(angle_diff) > 80 and abs(next_checkpoint_angle) > 40 and abs(vector_mag) < 300:
-        thrust = 80
-
-    # HEADING
-
-    heading_x = next_checkpoint_x
-    heading_y = next_checkpoint_y
-
-    comp_vector_angle = 0  # compensating vector
-    comp_x = -y_ship_to_target
-    comp_y = -x_ship_to_target
-
-    # /math.pi*180 # N: -90  S: 90  W: 180 / -180 E: 0
-    comp_angle = math.atan2(comp_y, comp_x)
-    #comp_angle = pp_angle(comp_angle)
-
-    comp_x = 400 * math.cos(comp_angle)
-    comp_y = 400 * math.sin(comp_angle)
-
-    if dy > 0:  # going down
-        if angle_diff > 1:
-            heading_x += int(comp_x)
-            heading_y -= int(comp_y)
-        elif angle_diff < -1:
-            heading_x -= int(comp_x)
-            heading_y += int(comp_y)
-    elif dy < 0:  # going up
-        if angle_diff > 1:
-            heading_x += int(comp_x)
-            heading_y -= int(comp_y)
-        elif angle_diff < -1:
-            heading_x -= int(comp_x)
-            heading_y += int(comp_y)
-
-    # math.degrees(x)
-    # Convert angle x from radians to degrees.
-
-    # math.radians(x)
-    # Convert angle x from degrees to radians.
-
-    #angle_diff = (angle_diff + 180) % 360 - 180
-
-    # DEBUGGING
-    print("dx ", file=sys.stderr, end="")
-    print(dx, file=sys.stderr)
-    print("dy ", file=sys.stderr, end="")
-    print(dy, file=sys.stderr)
-    print("comp x ", file=sys.stderr, end="")
-    print(comp_x, file=sys.stderr)
-    print("comp y ", file=sys.stderr, end="")
-    print(comp_y, file=sys.stderr)
-    print("comp_angle ", file=sys.stderr, end="")
-    print(comp_angle, file=sys.stderr)
-    print("angle diff ", file=sys.stderr, end="")
-    print(angle_diff, file=sys.stderr)
-    #print("angle to target ", file=sys.stderr, end = "")
-    #print(angle_to_target, file=sys.stderr)
-    print("vector_mag ", file=sys.stderr, end="")
-    print(vector_mag, file=sys.stderr)
-    print("vector_heading ", file=sys.stderr, end="")
-    print(vector_heading, file=sys.stderr)
-    #print("distMultiplier ", file=sys.stderr, end = "")
-    #print(distMultiplier, file=sys.stderr)
-    #print("angleMultiplier ", file=sys.stderr, end = "")
-    #print(angleMultiplier, file=sys.stderr)
-    #print("thrustMultiplier ", file=sys.stderr, end = "")
-    #print(thrustMultiplier, file=sys.stderr)
-    print("thrust " + str(thrust), file=sys.stderr)
-    #print("distance " + str(next_checkpoint_dist), file=sys.stderr)
-    print("next_checkpoint_angle " + str(next_checkpoint_angle), file=sys.stderr)
-
-    # You have to output the target position
-    # followed by the power (0 <= thrust <= 100)
-    # i.e.: "x y thrust"
-
-    # if abs(opponent_x - x) < 1000 and abs(opponent_y - y) < 1000 and counter > 30:
-    #    print(str(opponent_x) + " " + str(opponent_y) + " " + str(100))
-    # else :
-    print(str(heading_x) + " " + str(heading_y) + " " + str(thrust))
+    print(f"{pods[0].heading.x} {pods[0].heading.y} {pods[0].thrust}")
+    print(f"{pods[1].heading.x} {pods[1].heading.y} {pods[1].thrust}")
