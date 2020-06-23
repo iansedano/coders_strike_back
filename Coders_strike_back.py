@@ -1,7 +1,7 @@
 """
 Coders Strike back Gold League Bot.
 
-Currently standing in at around 960th place in gold league.
+Currently standing in at around 100th in Gold league.
 
 All angles in radians where possible in scale of pi to -pi
 
@@ -48,6 +48,8 @@ class point:
         return point(x, y)
 
     def flip(self):
+        """ Flip around axis
+        Only to be used when pod is taken as (0,0)"""
         x = self.x * -1
         y = self.y * -1
         return point(x, y)
@@ -102,6 +104,12 @@ class rel:
 
         return self.parent_cp.pos + self.compensation
 
+class heading:
+    def __init__(self, pod):
+        self.pod
+
+class compensation:
+    def __init__(vector, target)
 
 class pod:
     def __init__(self, pos, global_vector, angle_facing, current_cp):
@@ -115,11 +123,10 @@ class pod:
         self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
-        self.thrust = 100
 
     def get_heading(self):
 
-        # Sets a base heading in case none of the if statements catch
+        # Set a base heading in case none of the if statements catch
         self.current_cp_rel.add_compensation_angle(self, limit=5000)
         base_heading = self.current_cp_rel.compensated_heading()
         self.heading = base_heading
@@ -261,6 +268,7 @@ def constrain(val, min_val, max_val):
 
 
 def constrain_point(pos, min_val, max_val):
+    """only valid when taking pod as (0,0)"""
 
     x = int(constrain(pos.x, min_val, max_val))
     y = int(constrain(pos.y, min_val, max_val))
