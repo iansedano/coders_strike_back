@@ -24,7 +24,7 @@ pi = 3.14159
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++CLASSES++++++++++++++++++++++++++
+# +++++++++++++++++++POINT & VECTOR+++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 class point:
@@ -55,12 +55,6 @@ class point:
         return point(x, y)
 
 
-class cp:  # Checkpoint
-    def __init__(self, pos, id):
-        self.pos = pos
-        self.id = id
-
-
 class vector:
     def __init__(self, vx, vy):
         self.x = vx
@@ -79,6 +73,14 @@ class vector:
         elif self.x > 0 and self.y < 0:
             self.quadrant = 4
 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++CHECKPOINT+++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+class cp:  # Checkpoint
+    def __init__(self, pos, id):
+        self.pos = pos
+        self.id = id
 
 class rel:
     def __init__(self, pod, cp):
@@ -110,6 +112,10 @@ class heading:
 
 class compensation:
     def __init__(vector, target)
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++POD+++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 class pod:
     def __init__(self, pos, global_vector, angle_facing, current_cp):
@@ -251,30 +257,8 @@ class pod:
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++FUNCTIONS++++++++++++++++++++++++++
+# ++++++++++++++++ANGLE FUNCTIONS+++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
-def debug(var_name="", variable=""):
-    print(f"{var_name}, {variable}", file=sys.stderr)
-    
-
-
-def constrain(val, min_val, max_val):
-    """Constrain value between min and max."""
-    val = int(min(max_val, max(min_val, val)))
-
-    return val
-
-
-def constrain_point(pos, min_val, max_val):
-    """only valid when taking pod as (0,0)"""
-
-    x = int(constrain(pos.x, min_val, max_val))
-    y = int(constrain(pos.y, min_val, max_val))
-
-    return point(x, y)
-
 
 def flip_rotation_direction(angle, type="radians"):
     if type == "degrees":
@@ -283,23 +267,13 @@ def flip_rotation_direction(angle, type="radians"):
         angle = (-angle) % pi
     return angle
 
-
 def change_angle_scale_to_180(angle):
     angle = (angle - 180) % 360 - 180
     return angle
 
-
 def degree_to_rads(angle):
     angle = angle * (pi / 180)
     return angle
-
-
-def get_distance(point1, point2):
-    x = point2.x - point1.x
-    y = point2.y - point1.y
-    d = math.hypot(x, y)
-    return d
-
 
 def find_quadrant(origin, target):
     """Get the target quadrant from an x and y position."""
@@ -312,7 +286,6 @@ def find_quadrant(origin, target):
     elif target.x > origin.x and target.y > origin.y:
         return 4
 
-
 def get_signed_angle(a1, a2):
 
     diff = a1 - a2
@@ -323,7 +296,6 @@ def get_signed_angle(a1, a2):
 
     return diff
 
-
 def facing_compensation(pod):
 
     if abs(pod.current_cp_rel.facing_offset) > pi * 4/5:
@@ -332,8 +304,40 @@ def facing_compensation(pod):
     elif abs(pod.current_cp_rel.facing_offset) > pi * 3/5:
         pod.thrust = 30
 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++UTILITY FUNCTIONS+++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+def debug(var_name="", variable=""):
+    print(f"{var_name}, {variable}", file=sys.stderr)
+
+def constrain(val, min_val, max_val):
+    """Constrain value between min and max."""
+    val = int(min(max_val, max(min_val, val)))
+
+    return val
+
+def constrain_point(pos, min_val, max_val):
+    """ Constrain the magnitude from (0,0) of a point
+
+        Generally used to limit the compensation of a heading."""
+
+    x = int(constrain(pos.x, min_val, max_val))
+    y = int(constrain(pos.y, min_val, max_val))
+
+    return point(x, y)
+
+def get_distance(point1, point2):
+    """ Get distance between two points """
+
+    x = point2.x - point1.x
+    y = point2.y - point1.y
+    d = math.hypot(x, y)
+    return d
 
 def get_relative_pos_from_global(p1, p2):
+    """ Get vector from two positions """
+
     quadrant = find_quadrant(p1, p2)
 
     x = 0
@@ -354,8 +358,14 @@ def get_relative_pos_from_global(p1, p2):
 
     return vector(x, y)
 
-
 def get_global_angle(p1, p2):
+    """
+        Get global angle between two points
+
+        That is, if a p1 is the pod, at (0, 0)
+        and p2 is at (-100, 100)
+        The global angle would be 3/4 pi
+        """
     d = get_distance(p1, p2)
     q = find_quadrant(p1, p2)
 
@@ -376,8 +386,10 @@ def get_global_angle(p1, p2):
 
     return global_angle
 
-
 def get_angle_between_three_points(p1, p2, p3):
+    """ Get angle between three points
+
+        At p2 between p1 and p3 """
 
     d_p1_p2 = get_distance(p1, p2)
     d_p2_p3 = get_distance(p2, p3)
@@ -385,16 +397,22 @@ def get_angle_between_three_points(p1, p2, p3):
 
     # law of cosines
     angle = (
-        math.acos((
-            d_p1_p3 ** 2 - d_p1_p2 ** 2 - d_p2_p3 ** 2
-            ) / (-2 * d_p1_p2 * d_p2_p3))
-        )
+        math.acos(
+                    (
+                        d_p1_p3 ** 2 - d_p1_p2 ** 2 - d_p2_p3 ** 2
+                    ) / (
+                        -2 * d_p1_p2 * d_p2_p3
+                    )
+                 )
+            )
 
     return angle
 
-
 def get_overshoot_pos(
         cp_rel, pod, pod_heading, angle):
+
+    """ Get the point where the current heading will overshoot the target
+    """
 
     d_overshoot_target = abs(cp_rel.d * math.tan(abs(angle)))
 
@@ -415,6 +433,8 @@ def get_overshoot_pos(
 
 
 def left_or_right(p1, p2, p3):
+    """ Determine whether from p1, passing p2
+        to reach p3 will be a left or right turn """
 
     global_angle_p1_p2 = get_global_angle(p1, p2)
     global_angle_p2_p3 = get_global_angle(p2, p3)
@@ -426,14 +446,9 @@ def left_or_right(p1, p2, p3):
     else:
         return "right"
 
-
-
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++INITIALIZATION++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++GAME LOOP++++++++++++++++++++++++++
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 
 pods = {}
 
@@ -450,6 +465,10 @@ for i in range(cp_count):
 
 counter = 0
 last_shield_activation = [0, 0]
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++GAME LOOP++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 while True:
     counter += 1
