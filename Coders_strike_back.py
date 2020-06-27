@@ -118,15 +118,46 @@ class compensation:
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 class pod:
-    def __init__(self, pos, global_vector, angle_facing, current_cp):
-        self.pos = pos
-        self.global_vector = global_vector
-        self.angle_facing = angle_facing
-        self.current_cp = current_cp
-        self.next_cp = cps[(current_cp.id + 1) % (cp_count)]
-        self.last_cp = cps[(current_cp.id - 1) % (cp_count)]
-        self.next_cp2 = cps[(current_cp.id + 2) % (cp_count)]
-        self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
+    def __init__(self):
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, p):
+        self._pos = p
+
+    @property
+    def global_vector(self):
+        return self._global_vector
+
+    @global_vector.setter
+    def global_vector(self, p):
+        self._global_vector = p
+        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)  
+
+    @property
+    def angle_facing(self):
+        return self._angle_facing
+
+    @angle_facing.setter
+    def angle_facing(self, p):
+        self._angle_facing = p
+
+    @property
+    def current_cp(self):
+        return self._current_cp
+
+    @current_cp.setter
+    def current_cp(self, p):
+        self._current_cp = p
+        self.next_cp = cps[(_current_cp.id + 1) % (cp_count)]
+        self.last_cp = cps[(_current_cp.id - 1) % (cp_count)]
+        self.next_cp2 = cps[(_current_cp.id + 2) % (cp_count)]
+
+
+
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
 
@@ -450,7 +481,7 @@ def left_or_right(p1, p2, p3):
 # ++++++++++++++++INITIALIZATION++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-pods = {}
+pods = {pod1, pod2}
 
 enemy_pods = {}
 
