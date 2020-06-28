@@ -86,8 +86,8 @@ class rel:
     def __init__(self, pod, cp):
         self.d = get_distance(pod.pos, cp.pos)
         self.parent_cp = cp
-        translation_pod_cp = get_relative_pos_from_global(pod.pos, cp.pos)
-        self.abs_angle = translation_pod_cp.angle
+        self.vector_pod_cp = get_vector(pod.pos, cp.pos)
+        self.abs_angle = self.vector_pod_cp.angle
         self.facing_offset = get_signed_angle(
                                 self.abs_angle, pod.angle_facing)
         self.heading_offset = get_signed_angle(
@@ -119,47 +119,28 @@ class compensation:
 
 class pod:
     def __init__(self):
+        self.pos = None
+        self.global_vector = None
+        self.angle_facing = None
+        self.current_cp = None
 
-    @property
-    def pos(self):
-        return self._pos
+    def calc_basic(self):
 
-    @pos.setter
-    def pos(self, p):
-        self._pos = p
+        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)
 
-    @property
-    def global_vector(self):
-        return self._global_vector
-
-    @global_vector.setter
-    def global_vector(self, p):
-        self._global_vector = p
-        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)  
-
-    @property
-    def angle_facing(self):
-        return self._angle_facing
-
-    @angle_facing.setter
-    def angle_facing(self, p):
-        self._angle_facing = p
-
-    @property
-    def current_cp(self):
-        return self._current_cp
-
-    @current_cp.setter
-    def current_cp(self, p):
-        self._current_cp = p
-        self.next_cp = cps[(_current_cp.id + 1) % (cp_count)]
-        self.last_cp = cps[(_current_cp.id - 1) % (cp_count)]
-        self.next_cp2 = cps[(_current_cp.id + 2) % (cp_count)]
+        self.last_cp = cps[(_current_cp.id - 1) % (cp_count)] # cp just passed
+        self.next_cp = cps[(_current_cp.id + 1) % (cp_count)] # cp after current
+        self.next_cp2 = cps[(_current_cp.id + 2) % (cp_count)] # cp after next
 
 
+class my_pod(pod):
+
+    def calc(self):
 
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
+
+        self.heading = heading(self)
 
     def get_heading(self):
 
@@ -169,7 +150,7 @@ class pod:
         self.heading = base_heading
         self.thrust = 100
 
-        # +++++++ HEADING ALGORITHM +++++
+        # +++++++ HEADING ALGORITHM +++++++
         
         # If far enough, boost
         if (
@@ -366,7 +347,7 @@ def get_distance(point1, point2):
     d = math.hypot(x, y)
     return d
 
-def get_relative_pos_from_global(p1, p2):
+def get_vector(p1, p2):
     """ Get vector from two positions """
 
     quadrant = find_quadrant(p1, p2)
