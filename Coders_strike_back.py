@@ -110,11 +110,6 @@ class vector:
         self.a = math.atan2(self.y, self.x)
         self.mag = math.hypot(self.x, self.y)
 
-    def flip(self):
-        """ Flip around axis
-        Only to be used when pod is taken as (0,0)"""
-        x = self.x * -1
-        y = self.y * -1
 
     def get_quadrant(self):
         """Get the quadrant a vector is facing."""
@@ -151,17 +146,22 @@ class pod:
         self.current_cp = None
         self.heading = None
 
-    def calc_basic(self):
+    def tick_update(pos, global_vector, a_facing, current_cp, heading):
+        self.pos = pos
+        self.global_vector = global_vector
+        self.a_facing = a_facing
+        self.current_cp = current_cp
+        self.heading = heading
+        self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
 
-        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)
-
-        self.last_cp = cps[(self.current_cp.id - 1) % (cp_count)]  # cp just passed
-        self.next_cp = cps[(self.current_cp.id + 1) % (cp_count)]  # cp after current
-        self.next_cp2 = cps[(self.current_cp.id + 2) % (cp_count)]  # cp after next
+    def cp_update(self):
+        self.last_cp = cps[(self.current_cp.id - 1) % (cp_count)]
+        self.next_cp = cps[(self.current_cp.id + 1) % (cp_count)]
+        self.next_cp2 = cps[(self.current_cp.id + 2) % (cp_count)]
 
     def predict(self):
 
-        thrust_v = get_vector(p1, p2)
+        thrust_v = vector(2, self.thrust, self.a_facing)
 
         new_x = self.pos.x + self.global_vector.x + thrust_v.x
         new_y = self.pos.y + self.global_vector.y + thrust_v.y
@@ -173,7 +173,17 @@ class my_pod(pod):
 
     def get_heading(self):
 
-        self.heading = heading(self.pos, self.a_facing, self.vector, self.current_cp.pos)
+        self.heading = heading(
+            self.pos,
+            self.a_facing,
+            self.vector,
+            self.current_cp.pos
+            )
+
+class enemy_pod(pod):
+    def predic(self):
+        super(enemy_pod, self).tick_update(self):
+
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
