@@ -11,6 +11,32 @@ a = angle
 d = d
 v = vector
 
+map 16000 units wide and 9000 units high - (0, 0) is in top left.
+
+checkpoint radius is 600 units
+
+The pod will pivot to face the destination point
+by a maximum of 18 degrees per turn
+and will then accelerate in that direction.
+
+pod radius is 400 units
+
+the pods facing vector is multiplied by the given thrust value
+the result is added to the current speed vector
+the speed vector is added to the position of the pod
+
+FRICTION - current speed vector is multiplied by 0.85
+
+Collisions are elastic, minimum impulse of collision is 120.
+
+Boost is equivalent to acceleration of 650
+
+Shield multiplies pod mass by 10
+
+Provided angle is absolute, east is 0, south is 90
+
+Response time first turn ≤ 1000ms
+Response time per turn ≤ 75ms
 
 """
 import sys
@@ -35,32 +61,60 @@ class point:
     def __add__(self, other):
         x = self.x + other.x
         y = self.y + other.y
-        return point(x, y)
 
     def __sub__(self, other):
         x = self.x - other.x
         y = self.y - other.y
-        return point(x, y)
 
     def __mul__(self, num):
         x = self.x * num
         y = self.y * num
-        return point(x, y)
 
     def flip(self):
         """ Flip around axis
         Only to be used when pod is taken as (0,0)"""
         x = self.x * -1
         y = self.y * -1
-        return point(x, y)
 
 
 class vector:
-    def __init__(self, vx, vy):
-        self.x = vx
-        self.y = vy
-        self.angle = math.atan2(self.y, self.x)
-        self.abs = math.hypot(self.x, self.y)
+    def __init__(self, type, arg1, arg2):
+        if type = "1":
+            self.x = arg1
+            self.y = arg2
+            self.a = math.atan2(self.y, self.x)
+            self.mag = math.hypot(self.x, self.y)
+        elif type = "2":
+            self.mag = arg1
+            self.a = arg2
+            self.x = mag * math.cos(a)
+            self.y = mag * math.sin(a)
+        else:
+            raise ValueError("Invalid Vector arguments")
+
+    def __add__(self, other):
+        x = self.x + other.x
+        y = self.y + other.y
+        self.a = math.atan2(self.y, self.x)
+        self.mag = math.hypot(self.x, self.y)
+
+    def __sub__(self, other):
+        x = self.x - other.x
+        y = self.y - other.y
+        self.a = math.atan2(self.y, self.x)
+        self.mag = math.hypot(self.x, self.y)
+
+    def __mul__(self, num):
+        x = self.x * num
+        y = self.y * num
+        self.a = math.atan2(self.y, self.x)
+        self.mag = math.hypot(self.x, self.y)
+
+    def flip(self):
+        """ Flip around axis
+        Only to be used when pod is taken as (0,0)"""
+        x = self.x * -1
+        y = self.y * -1
 
     def get_quadrant(self):
         """Get the quadrant a vector is facing."""
@@ -84,17 +138,42 @@ class cp:  # Checkpoint
         self.id = id
 
 
-class rel:
-    def __init__(self, pod_pos, pod_angle_facing, pod_vector, target_pos):
-        self.d = get_distance(pod_pos, target_pos)
-        self.vector_pod_target = get_vector(pod_pos, target_pos)
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++POD+++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        self.abs_angle = self.vector_pod_target.angle
 
-        self.facing_offset = get_signed_a(
-                                self.abs_angle, pod_angle_facing)
-        self.heading_offset = get_signed_a(
-                                self.abs_angle, pod_vector.angle)
+class pod:
+    def __init__(self):
+        self.pos = None
+        self.global_vector = None
+        self.a_facing = None
+        self.current_cp = None
+        self.heading = None
+
+    def calc_basic(self):
+
+        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)
+
+        self.last_cp = cps[(self.current_cp.id - 1) % (cp_count)]  # cp just passed
+        self.next_cp = cps[(self.current_cp.id + 1) % (cp_count)]  # cp after current
+        self.next_cp2 = cps[(self.current_cp.id + 2) % (cp_count)]  # cp after next
+
+    def predict(self):
+
+        thrust_v = get_vector(p1, p2)
+
+        new_x = self.pos.x + self.global_vector.x + thrust_v.x
+        new_y = self.pos.y + self.global_vector.y + thrust_v.y
+
+        self.next_pos = point(new_x, new_y)
+
+
+class my_pod(pod):
+
+    def get_heading(self):
+
+        self.heading = heading(self.pos, self.a_facing, self.vector, self.current_cp.pos)
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -108,12 +187,72 @@ class heading:
         self.pod_angle_facing = pod_angle_facing
         self.pod_vector = pod_vector
         self.target = target_pos
+        self.thrust = 100
 
-        d = get_distance(pod_pos, target_pos)
+        self.d = get_distance(pod_pos, target_pos)
 
-        vector_pod_target = get_vector(pod_pos, target_pos)
+        self.v_pod_target = get_vector(pod_pos, target_pos)
 
-        abs_a_to_target = vector_pod_target.angle
+        self.abs_a_to_target = v_pod_target.angle
+
+        self.facing_offset = get_signed_a(
+                                self.abs_a_to_target, pod_angle_facing)
+        self.heading_offset = get_signed_a(
+                                self.abs_a_to_target, pod_vector.angle)
+
+
+    def get_heading(self):
+
+        self.current_cp_rel = rel(self, self.current_cp)
+        self.next_cp_rel = rel(self, self.next_cp)
+
+        self.heading = heading(self)
+
+        # Set a base heading in case none of the if statements catch
+        self.current_cp_rel.add_compensation_angle(self, limit=5000)
+        base_heading = self.current_cp_rel.compensated_heading()
+        self.heading = base_heading
+        self.thrust = 100
+
+        # +++++++ HEADING ALGORITHM +++++++
+        
+        # If far enough, boost
+        if (
+                self.current_cp_rel.d > 6000 and
+                abs(self.current_cp_rel.facing_offset) < 0.1):
+            self.thrust = "BOOST"
+
+        # +++ Getting info about the corner to take+++
+        self.angle_pod_current_next = get_angle_between_three_points(
+                                        self.pos,
+                                        self.current_cp.pos,
+                                        self.next_cp.pos)
+        d_last_cp_current_cp = get_distance(
+                                        self.last_cp.pos,
+                                        self.current_cp.pos)
+        d_pod_last_cp = get_distance(
+                                        self.pos,
+                                        self.last_cp.pos)
+
+        # if far enough, and heading in the right direction
+        # swing out in preparation for the corner.
+        if (
+                # d_pod_last_cp > 1000 and
+                self.current_cp_rel.d > d_pod_last_cp * 3 and
+                self.current_cp_rel.heading_offset < pi/4 and
+                d_last_cp_current_cp > 5000):
+            debug("status - prepping corner")
+            self.heading = self.prepare_corner()
+
+        # if heading is good, activate corner procedure
+        if (
+                self.vector.abs > 0 and
+                abs(self.current_cp_rel.heading_offset) < 0.7):
+            debug("status - cornering")
+            self.corner()
+
+        # if facing the wrong direction, do not thrust...
+        # facing_compensation(self)
 
 
 class compensated_heading(heading):
@@ -192,91 +331,6 @@ class corner_prep_heading(heading):
         self.target = point(0, 0)
 
 
-class compensation:
-    def __init__(vector, target)
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# ++++++++++++++++++++++++POD+++++++++++++++++++++++++++++
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-class pod:
-    def __init__(self):
-        self.pos = None
-        self.global_vector = None
-        self.angle_facing = None
-        self.current_cp = None
-
-    def calc_basic(self):
-
-        self.vector = vector(self._global_vector.x, self._global_vector.y * -1)
-
-        self.last_cp = cps[(_current_cp.id - 1) % (cp_count)] # cp just passed
-        self.next_cp = cps[(_current_cp.id + 1) % (cp_count)] # cp after current
-        self.next_cp2 = cps[(_current_cp.id + 2) % (cp_count)] # cp after next
-
-    def predict(self):
-
-        new_x = self.pos.x + self.global_vector.x
-        new_y = self.pos.y + self.global_vector.y
-
-        self.next_pos = point(new_x, new_y)
-
-
-class my_pod(pod):
-
-    def get_heading(self):
-
-        self.current_cp_rel = rel(self, self.current_cp)
-        self.next_cp_rel = rel(self, self.next_cp)
-
-        self.heading = heading(self)
-
-        # Set a base heading in case none of the if statements catch
-        self.current_cp_rel.add_compensation_angle(self, limit=5000)
-        base_heading = self.current_cp_rel.compensated_heading()
-        self.heading = base_heading
-        self.thrust = 100
-
-        # +++++++ HEADING ALGORITHM +++++++
-        
-        # If far enough, boost
-        if (
-                self.current_cp_rel.d > 6000 and
-                abs(self.current_cp_rel.facing_offset) < 0.1):
-            self.thrust = "BOOST"
-
-        # +++ Getting info about the corner to take+++
-        self.angle_pod_current_next = get_angle_between_three_points(
-                                        self.pos,
-                                        self.current_cp.pos,
-                                        self.next_cp.pos)
-        d_last_cp_current_cp = get_distance(
-                                        self.last_cp.pos,
-                                        self.current_cp.pos)
-        d_pod_last_cp = get_distance(
-                                        self.pos,
-                                        self.last_cp.pos)
-
-        # if far enough, and heading in the right direction
-        # swing out in preparation for the corner.
-        if (
-                # d_pod_last_cp > 1000 and
-                self.current_cp_rel.d > d_pod_last_cp * 3 and
-                self.current_cp_rel.heading_offset < pi/4 and
-                d_last_cp_current_cp > 5000):
-            debug("status - prepping corner")
-            self.heading = self.prepare_corner()
-
-        # if heading is good, activate corner procedure
-        if (
-                self.vector.abs > 0 and
-                abs(self.current_cp_rel.heading_offset) < 0.7):
-            debug("status - cornering")
-            self.corner()
-
-        # if facing the wrong direction, do not thrust...
-        # facing_compensation(self)
-
     def prepare_corner(self, limit=5000):
 
         direction = left_or_right(
@@ -347,7 +401,10 @@ class my_pod(pod):
                 self.heading = next_heading
                 self.thrust = 0
 
-    
+
+class compensation:
+    def __init__(vector, target)
+
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -430,7 +487,7 @@ def get_distance(point1, point2):
     return d
 
 
-def get_vector(p1, p2):
+def get_vector_from_pos(p1, p2):
     """ Get vector from two positions """
 
     quadrant = find_quadrant(p1, p2)
@@ -452,6 +509,9 @@ def get_vector(p1, p2):
         y = (p2.y - p1.y) * -1
 
     return vector(x, y)
+
+def get_vector_components(magnitude, angle):
+
 
 
 def get_global_angle(p1, p2):
@@ -506,9 +566,6 @@ def get_angle_between_three_points(p1, p2, p3):
     return angle
 
 
-
-
-
 def left_or_right(p1, p2, p3):
     """ Determine whether from p1, passing p2
         to reach p3 will be a left or right turn """
@@ -529,7 +586,7 @@ def left_or_right(p1, p2, p3):
 
 pods = {pod1, pod2}
 
-enemy_pods = {}
+enemy_pods = {e_pod1, e_pod2}
 
 laps = int(input())
 cp_count = int(input())
