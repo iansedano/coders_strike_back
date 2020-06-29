@@ -7,8 +7,9 @@ All angles in radians where possible in scale of pi to -pi
 
 cp = cp
 rel = relation
-agl = angle
+a = angle
 d = d
+v = vector
 
 
 """
@@ -21,11 +22,10 @@ import math
 pi = 3.14159
 
 
-
-
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++POINT & VECTOR+++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 
 class point:
     def __init__(self, x, y):
@@ -77,38 +77,120 @@ class vector:
 # +++++++++++++++++++++CHECKPOINT+++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+
 class cp:  # Checkpoint
     def __init__(self, pos, id):
         self.pos = pos
         self.id = id
 
-class rel:
-    def __init__(self, pod, cp):
-        self.d = get_distance(pod.pos, cp.pos)
-        self.parent_cp = cp
-        self.vector_pod_cp = get_vector(pod.pos, cp.pos)
-        self.abs_angle = self.vector_pod_cp.angle
-        self.facing_offset = get_signed_angle(
-                                self.abs_angle, pod.angle_facing)
-        self.heading_offset = get_signed_angle(
-                                self.abs_angle, pod.vector.angle)
 
-    def add_compensation_angle(self, pod, limit=7000):
+class rel:
+    def __init__(self, pod_pos, pod_angle_facing, pod_vector, target_pos):
+        self.d = get_distance(pod_pos, target_pos)
+        self.vector_pod_target = get_vector(pod_pos, target_pos)
+
+        self.abs_angle = self.vector_pod_target.angle
+
+        self.facing_offset = get_signed_a(
+                                self.abs_angle, pod_angle_facing)
+        self.heading_offset = get_signed_a(
+                                self.abs_angle, pod_vector.angle)
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++HEADING++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+class heading:
+    def __init__(self, pod_pos, pod_angle_facing, pod_vector, target_pos):
+        self.pod_pos = pod_pos
+        self.pod_angle_facing = pod_angle_facing
+        self.pod_vector = pod_vector
+        self.target = target_pos
+
+        d = get_distance(pod_pos, target_pos)
+
+        vector_pod_target = get_vector(pod_pos, target_pos)
+
+        abs_a_to_target = vector_pod_target.angle
+
+
+class compensated_heading(heading):
+
+    def add_compensation_angle(self, limit=7000):
 
         global_overshoot = get_overshoot_pos(
             self, pod, pod.vector.angle, pod.current_cp_rel.heading_offset)
 
         # compensation values (point opposite target from overshoot)
 
-        self.compensation = constrain_point(global_overshoot.flip(), -limit, limit)
+        self.compensation = (
+            constrain_point(
+                global_overshoot.flip(), -limit, limit
+                )
+            )
 
-    def compensated_heading(self):
+        def compensated_heading(self):
 
-        return self.parent_cp.pos + self.compensation
+            return self.parent_cp.pos + self.compensation
 
-class heading:
+    heading_offset = get_signed_a(abs_a_to_target, pod_vector.angle)
+
+    def get_overshoot_pos(self):
+
+        """ Get the point where the current heading will overshoot the target
+
+            arguments
+
+            d_pod_target : distance from pod to target
+            a_heading_offset: angle of heading offset
+            pod_v_a : pod vector angle
+            pod_pos : pod position
+            target_pos: target position
+
+            ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+            +                                                              +
+            +                                         + overshoot point    +
+            +                    current vector                            +
+            +                        ----                                  +
+            +                  -----/                                      +
+            +           ------/                                            +
+            +   pod ---/                              X target             +
+            +                                                              +
+            ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        """
+
+        # calculate distance between target and overshoot point.
+        d_overshoot_target = abs(d_pod_target * math.tan(abs(pod_vector.angle)))
+
+        # calculate distance between pod and overshoot point.
+        d_pod_overshoot = math.hypot(d_pod_target, d_overshoot_target)
+
+        # Get coordinates of overshoot relative to pod
+        x_overshoot = (d_pod_overshoot * math.cos(pod_heading))
+        y_overshoot = (d_pod_overshoot * math.sin(pod_heading))
+
+
+        # ???? Is this the global position of the overshoot?
+        relative_overshoot = (
+            point(
+                pod_pos.x + x_overshoot,
+                pod_pos.y - y_overshoot)
+            )
+
+        # ????
+        global_overshoot = relative_overshoot - target_pos
+
+        return global_overshoot
+
+
+class corner_prep_heading(heading):
     def __init__(self, pod):
         self.pod
+        self.target = point(0, 0)
+
 
 class compensation:
     def __init__(vector, target)
@@ -132,17 +214,22 @@ class pod:
         self.next_cp = cps[(_current_cp.id + 1) % (cp_count)] # cp after current
         self.next_cp2 = cps[(_current_cp.id + 2) % (cp_count)] # cp after next
 
+    def predict(self):
+
+        new_x = self.pos.x + self.global_vector.x
+        new_y = self.pos.y + self.global_vector.y
+
+        self.next_pos = point(new_x, new_y)
+
 
 class my_pod(pod):
 
-    def calc(self):
+    def get_heading(self):
 
         self.current_cp_rel = rel(self, self.current_cp)
         self.next_cp_rel = rel(self, self.next_cp)
 
         self.heading = heading(self)
-
-    def get_heading(self):
 
         # Set a base heading in case none of the if statements catch
         self.current_cp_rel.add_compensation_angle(self, limit=5000)
@@ -260,12 +347,7 @@ class my_pod(pod):
                 self.heading = next_heading
                 self.thrust = 0
 
-    def predict_next_pos(self):
-
-        new_x = self.pos.x + self.global_vector.x
-        new_y = self.pos.y + self.global_vector.y
-
-        self.next_pos = point(new_x, new_y)
+    
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -298,7 +380,7 @@ def find_quadrant(origin, target):
     elif target.x > origin.x and target.y > origin.y:
         return 4
 
-def get_signed_angle(a1, a2):
+def get_signed_a(a1, a2):
 
     diff = a1 - a2
     if diff > pi:
@@ -347,6 +429,7 @@ def get_distance(point1, point2):
     d = math.hypot(x, y)
     return d
 
+
 def get_vector(p1, p2):
     """ Get vector from two positions """
 
@@ -369,6 +452,7 @@ def get_vector(p1, p2):
         y = (p2.y - p1.y) * -1
 
     return vector(x, y)
+
 
 def get_global_angle(p1, p2):
     """
@@ -398,6 +482,7 @@ def get_global_angle(p1, p2):
 
     return global_angle
 
+
 def get_angle_between_three_points(p1, p2, p3):
     """ Get angle between three points
 
@@ -420,28 +505,8 @@ def get_angle_between_three_points(p1, p2, p3):
 
     return angle
 
-def get_overshoot_pos(
-        cp_rel, pod, pod_heading, angle):
 
-    """ Get the point where the current heading will overshoot the target
-    """
 
-    d_overshoot_target = abs(cp_rel.d * math.tan(abs(angle)))
-
-    # the d between pod and the overshoot point.
-    d_pod_overshoot = math.hypot(cp_rel.d, d_overshoot_target)
-
-    # coordinates of overshoot relative to pod
-
-    x_overshoot = (d_pod_overshoot * math.cos(pod_heading))
-    y_overshoot = (d_pod_overshoot * math.sin(pod_heading))
-
-    relative_overshoot = point(
-        pod.pos.x + x_overshoot, pod.pos.y - y_overshoot)
-
-    global_overshoot = relative_overshoot - cp_rel.parent_cp.pos
-
-    return global_overshoot
 
 
 def left_or_right(p1, p2, p3):
@@ -451,7 +516,7 @@ def left_or_right(p1, p2, p3):
     global_angle_p1_p2 = get_global_angle(p1, p2)
     global_angle_p2_p3 = get_global_angle(p2, p3)
 
-    angle = get_signed_angle(global_angle_p1_p2, global_angle_p2_p3)
+    angle = get_signed_a(global_angle_p1_p2, global_angle_p2_p3)
 
     if angle < 0:
         return "left"
