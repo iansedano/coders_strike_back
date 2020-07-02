@@ -204,41 +204,15 @@ class enemy_pod(pod):
 # +++++++++++++++++++++++HEADING++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+class heading(point):
+    ## TODO
+    def __init__(self, *args, **kwargs):
+        super(SubThing, self).__init__(*args, **kwargs)
+        self.time = datetime.now()
+    ##
 
-class heading_generator:
-    def __init__(self, pod_pos, pod_a_facing, pod_vector, target_pos):
-        """ Given parameters about the pod and the target
-            generate headings as necessary in format x, y, thrust"""
-
-        # Inputs necessary to calculate
-        self.pod_pos = pod_pos
-        self.pod_a_facing = pod_a_facing
-        self.pod_vector = pod_vector
-        self.target = target_pos
-        self.thrust = 100
-
-        # Simple calculations
-        self.d = get_distance(pod_pos, target_pos)
-        self.v_pod_target = get_vector(pod_pos, target_pos)
-        self.abs_a_to_target = v_pod_target.angle
-        self.facing_offset = get_signed_a(
-                                self.abs_a_to_target, pod_angle_facing)
-        self.heading_offset = get_signed_a(
-                                self.abs_a_to_target, pod_vector.angle)
-
-
-        
-
-    def get_heading(self):
-
-        # Set a base heading in case none of the if statements catch
-        self.current_cp_rel.add_compensation_angle(self, limit=5000)
-        base_heading = self.current_cp_rel.compensated_heading()
-        self.heading = base_heading
-        self.thrust = 100
-
-        # +++++++ HEADING ALGORITHM +++++++
-        
+class heading_manager:
+    
         # If far enough, boost
         if (
                 self.current_cp_rel.d > 6000 and
@@ -277,11 +251,51 @@ class heading_generator:
         # if facing the wrong direction, do not thrust...
         # facing_compensation(self)
 
+class heading_generator:
+    def __init__(self, pod_pos, pod_a_facing, pod_vector, target_pos):
+        """ Given parameters about the pod and the target
+            generate headings as necessary in format x, y, thrust"""
+
+        # Inputs necessary to calculate
+        self.pod_pos = pod_pos
+        self.pod_a_facing = pod_a_facing
+        self.pod_vector = pod_vector
+        self.target = target_pos
+        self.thrust = 100
+
+        # Simple calculations
+        self.d = get_distance(pod_pos, target_pos)
+        self.v_pod_target = get_vector(pod_pos, target_pos)
+        self.abs_a_to_target = v_pod_target.angle
+        self.facing_offset = get_signed_a(
+                                self.abs_a_to_target, pod_angle_facing)
+        self.heading_offset = get_signed_a(
+                                self.abs_a_to_target, pod_vector.angle)
+
+
+        
+
+    def get_heading(self):
+
+        # Set a base heading in case none of the if statements catch
+        self.current_cp_rel.add_compensation_angle(self, limit=5000)
+        base_heading = self.current_cp_rel.compensated_heading()
+        self.heading = base_heading
+        self.thrust = 100
+
+        
+
 
 class compensated_heading(heading):
 
+    ## TODO
+    def __init__(self, *args, **kwargs):
+        super(SubThing, self).__init__(*args, **kwargs)
+        self.time = datetime.now()
+    ##
+
     def add_compensation_angle(self, limit=7000):
-        
+
         self.overshoot_pos
         self.compensation_pos
 
