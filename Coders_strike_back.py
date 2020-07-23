@@ -180,6 +180,7 @@ class my_pod(pod):
             self.current_cp.pos
             )
 
+
 class enemy_pod(pod):
     def predic(self):
         super(enemy_pod, self).tick_update(self):
@@ -632,7 +633,7 @@ while True:
         current_cp = cps[current_cp_id]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
         current_pod.get_heading()
-        
+
         #if i == 1 and counter < 10:
         #    current_pod.thrust = 10
 
