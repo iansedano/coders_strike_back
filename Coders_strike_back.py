@@ -10,6 +10,7 @@ rel = relation
 a = angle
 d = d
 v = vector
+mag = magnitude
 
 map 16000 units wide and 9000 units high
 (0, 0) is in top left.
@@ -80,15 +81,15 @@ class point:
 
 
 class vector:
-    def __init__(self, type, arg1, arg2):
-        if type = "1":
-            self.x = arg1
-            self.y = arg2
+    def __init__(self, a=None, mag=None, x=None, y=None):
+        if a is None and mag is None:
+            self.x = x
+            self.y = y
             self.a = math.atan2(self.y, self.x)
             self.mag = math.hypot(self.x, self.y)
-        elif type = "2":
-            self.mag = arg1
-            self.a = arg2
+        elif x is None and y is None:
+            self.mag = mag
+            self.a = a
             self.x = mag * math.cos(a)
             self.y = mag * math.sin(a)
         else:
@@ -159,8 +160,8 @@ class pod:
         self.current_cp = current_cp
         self.heading = heading
         self.vector = vector(
-            self.global_vector.x,
-            self.global_vector.y * -1)
+            x = self.global_vector.x,
+            y = self.global_vector.y * -1)
 
     def cp_update(self):
         self.last_cp = cps[
@@ -175,7 +176,7 @@ class pod:
 
     def predict(self):
 
-        thrust_v = vector(2, self.thrust, self.a_facing)
+        thrust_v = vector(mag = self.thrust, a = self.a_facing)
 
         new_x = self.pos.x + self.global_vector.x + thrust_v.x
         new_y = self.pos.y + self.global_vector.y + thrust_v.y
@@ -549,7 +550,7 @@ def get_vector_from_pos(p1, p2):
         x = p2.x - p1.x
         y = (p2.y - p1.y) * -1
 
-    return vector(x, y)
+    return vector(x = x, y = y)
 
 def get_vector_components(magnitude, angle):
 
@@ -659,7 +660,7 @@ while True:
         angle_facing_in_rads = degree_to_rads(angle_facing)
 
         pod_pos = point(x, y)
-        pod_vector = vector(global_vx, global_vy)
+        pod_vector = vector(x = global_vx, y = global_vy)
         current_cp = cps[current_cp_id]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
         current_pod.get_heading()
@@ -683,7 +684,7 @@ while True:
         angle_facing_in_rads = degree_to_rads(angle_facing)
 
         pod_pos = point(x_2, y_2)
-        pod_vector = vector(global_vx_2, global_vy_2)
+        pod_vector = vector(x = global_vx_2, y = global_vy_2)
         current_cp = cps[current_check_point_id_2]
         current_pod = pod(pod_pos, pod_vector, angle_facing_in_rads, current_cp)
         current_pod.predict_next_pos()
