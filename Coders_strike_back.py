@@ -62,25 +62,28 @@ class point:
         self.y = y
 
     def __add__(self, other):
-        x = self.x + other.x
-        y = self.y + other.y
+        new_x = self.x + other.x
+        new_y = self.y + other.y
+        return point(new_x, new_y)
 
     def __sub__(self, other):
-        x = self.x - other.x
-        y = self.y - other.y
+        new_x = self.x - other.x
+        new_y = self.y - other.y
+        return point(new_x, new_y)
 
     def __mul__(self, num):
-        x = self.x * num
-        y = self.y * num
+        new_x = self.x * num
+        new_y = self.y * num
+        return point(new_x, new_y)
 
     def flip(self):
         """ Flip around axis
         Only to be used when pod is taken as (0,0)"""
-        x = self.x * -1
-        y = self.y * -1
+        new_x = self.x * -1
+        new_y = self.y * -1
+        return point(new_x, new_y)
 
-
-class vector:
+class vector(point):
     def __init__(self, a=None, mag=None, x=None, y=None):
         if a is None and mag is None:
             self.x = x
@@ -96,23 +99,16 @@ class vector:
             raise ValueError("Invalid Vector arguments")
 
     def __add__(self, other):
-        x = self.x + other.x
-        y = self.y + other.y
-        self.a = math.atan2(self.y, self.x)
-        self.mag = math.hypot(self.x, self.y)
+        new_point = super().__add__(other)
+        return vector(x=new_point.x, y=new_point.y)
 
     def __sub__(self, other):
-        x = self.x - other.x
-        y = self.y - other.y
-        self.a = math.atan2(self.y, self.x)
-        self.mag = math.hypot(self.x, self.y)
+        new_point = super().__sub__(other)
+        return vector(x=new_point.x, y=new_point.y)
 
     def __mul__(self, num):
-        x = self.x * num
-        y = self.y * num
-        self.a = math.atan2(self.y, self.x)
-        self.mag = math.hypot(self.x, self.y)
-
+        new_point = super().__mul__(other)
+        return vector(x=new_point.x, y=new_point.y)
 
     def get_quadrant(self):
         """Get the quadrant a vector is facing."""
