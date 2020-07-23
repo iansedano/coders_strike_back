@@ -11,7 +11,8 @@ a = angle
 d = d
 v = vector
 
-map 16000 units wide and 9000 units high - (0, 0) is in top left.
+map 16000 units wide and 9000 units high
+(0, 0) is in top left.
 
 checkpoint radius is 600 units
 
@@ -21,9 +22,12 @@ and will then accelerate in that direction.
 
 pod radius is 400 units
 
-the pods facing vector is multiplied by the given thrust value
-the result is added to the current speed vector
-the speed vector is added to the position of the pod
+the pods facing vector is multiplied
+by the given thrust value
+the result is added
+to the current speed vector
+the speed vector is added
+to the position of the pod
 
 FRICTION - current speed vector is multiplied by 0.85
 
@@ -42,8 +46,6 @@ Response time per turn ≤ 75ms
 import sys
 import math
 
-# for vector math refernce.
-# https://www.oreilly.com/library/view/machine-learning-with/9781491989371/ch01.html
 
 pi = 3.14159
 
@@ -146,18 +148,30 @@ class pod:
         self.current_cp = None
         self.heading = None
 
-    def tick_update(pos, global_vector, a_facing, current_cp, heading):
+    def tick_update(pos,
+                    global_vector,
+                    a_facing,
+                    current_cp,
+                    heading):
         self.pos = pos
         self.global_vector = global_vector
         self.a_facing = a_facing
         self.current_cp = current_cp
         self.heading = heading
-        self.vector = vector(self.global_vector.x, self.global_vector.y * -1)
+        self.vector = vector(
+            self.global_vector.x,
+            self.global_vector.y * -1)
 
     def cp_update(self):
-        self.last_cp = cps[(self.current_cp.id - 1) % (cp_count)]
-        self.next_cp = cps[(self.current_cp.id + 1) % (cp_count)]
-        self.next_cp2 = cps[(self.current_cp.id + 2) % (cp_count)]
+        self.last_cp = cps[
+            (self.current_cp.id - 1) % (cp_count)
+            ]
+        self.next_cp = cps[
+            (self.current_cp.id + 1) % (cp_count)
+            ]
+        self.next_cp2 = cps[
+            (self.current_cp.id + 2) % (cp_count)
+            ]
 
     def predict(self):
 
@@ -191,42 +205,15 @@ class enemy_pod(pod):
 # +++++++++++++++++++++++HEADING++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+class heading(point):
+    ## TODO
+    def __init__(self, *args, **kwargs):
+        super(SubThing, self).__init__(*args, **kwargs)
+        self.time = datetime.now()
+    ##
 
-class heading:
-    def __init__(self, pod_pos, pod_angle_facing, pod_vector, target_pos):
-        self.pod_pos = pod_pos
-        self.pod_angle_facing = pod_angle_facing
-        self.pod_vector = pod_vector
-        self.target = target_pos
-        self.thrust = 100
-
-        self.d = get_distance(pod_pos, target_pos)
-
-        self.v_pod_target = get_vector(pod_pos, target_pos)
-
-        self.abs_a_to_target = v_pod_target.angle
-
-        self.facing_offset = get_signed_a(
-                                self.abs_a_to_target, pod_angle_facing)
-        self.heading_offset = get_signed_a(
-                                self.abs_a_to_target, pod_vector.angle)
-
-
-    def get_heading(self):
-
-        self.current_cp_rel = rel(self, self.current_cp)
-        self.next_cp_rel = rel(self, self.next_cp)
-
-        self.heading = heading(self)
-
-        # Set a base heading in case none of the if statements catch
-        self.current_cp_rel.add_compensation_angle(self, limit=5000)
-        base_heading = self.current_cp_rel.compensated_heading()
-        self.heading = base_heading
-        self.thrust = 100
-
-        # +++++++ HEADING ALGORITHM +++++++
-        
+class heading_manager:
+    
         # If far enough, boost
         if (
                 self.current_cp_rel.d > 6000 and
@@ -265,10 +252,53 @@ class heading:
         # if facing the wrong direction, do not thrust...
         # facing_compensation(self)
 
+class heading_generator:
+    def __init__(self, pod_pos, pod_a_facing, pod_vector, target_pos):
+        """ Given parameters about the pod and the target
+            generate headings as necessary in format x, y, thrust"""
+
+        # Inputs necessary to calculate
+        self.pod_pos = pod_pos
+        self.pod_a_facing = pod_a_facing
+        self.pod_vector = pod_vector
+        self.target = target_pos
+        self.thrust = 100
+
+        # Simple calculations
+        self.d = get_distance(pod_pos, target_pos)
+        self.v_pod_target = get_vector(pod_pos, target_pos)
+        self.abs_a_to_target = v_pod_target.angle
+        self.facing_offset = get_signed_a(
+                                self.abs_a_to_target, pod_angle_facing)
+        self.heading_offset = get_signed_a(
+                                self.abs_a_to_target, pod_vector.angle)
+
+
+        
+
+    def get_heading(self):
+
+        # Set a base heading in case none of the if statements catch
+        self.current_cp_rel.add_compensation_angle(self, limit=5000)
+        base_heading = self.current_cp_rel.compensated_heading()
+        self.heading = base_heading
+        self.thrust = 100
+
+        
+
 
 class compensated_heading(heading):
 
+    ## TODO
+    def __init__(self, *args, **kwargs):
+        super(SubThing, self).__init__(*args, **kwargs)
+        self.time = datetime.now()
+    ##
+
     def add_compensation_angle(self, limit=7000):
+
+        self.overshoot_pos
+        self.compensation_pos
 
         global_overshoot = get_overshoot_pos(
             self, pod, pod.vector.angle, pod.current_cp_rel.heading_offset)
