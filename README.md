@@ -15,18 +15,21 @@ Due to the nature of the competition code is limited to a single file.
 
 ## The approach
 
-I have not implemented genetic algorithms as many have done and instead used physics and trigonometry to calculate angles, compensations and headings.  
-The pod will initially head towards its next checkpoint. At a certain distance it will make a small adjustment to its course so as to maximise its angle to the next checkpoint. It is like swerving out before taking a corner so that speed can be maintained.  
-As the pod approaches the checkpoint, based on the angle to the following checkpoint it will choose an appropriate cornering sequence. If, for example, it is a very tight turn, such as a hairpin turn, it will shut off the engine and turn to face the next checkpoint. At the right moment it will begin thrusting again. This allows cornering to be tight, making the pod just skim the checkpoint.  
-The code calculates the heading required to compensate for its momentum. In earlier revisions, it would just head towards the centre of the next checkpoint. If there was a lot of sideward momentum on the pod, it sometimes led to the pod orbiting the checkpoint. To remedy this the algorithm calculates a compensated heading. This I believe has been its main success.
+This code does not implement genetic algorithms as many have done and instead uses physics and trigonometry to calculate angles, compensations and headings.
+
+The pod will initially head towards its next checkpoint. At a certain distance it will make a small adjustment to its course so as to maximise its angle to the next checkpoint. It is like swerving out before taking a corner so that speed can be maintained.
+
+As the pod approaches the checkpoint, based on the angle to the following checkpoint it will choose a pre-defined cornering sequence. If, for example, it is a very tight turn, such as a hairpin turn, it will shut off the engine and turn to face the next checkpoint. After a delay it will begin thrusting again. This allows cornering to be tight, making the pod just skim the checkpoint.
+
+The code calculates the heading required to compensate for its momentum. In earlier revisions, it would just head towards the centre of the next checkpoint. If there was a lot of sideward momentum on the pod, it sometimes led to the pod orbiting the checkpoint. To remedy this the algorithm calculates a compensated heading.
 
 ## Areas for improvement
 
-Short of implementing a genetic algorithm, I believe that with some tweaking of the parameters for corners, how much compensation is made to side to side momentum and how much the pod prepares for cornering, that it may be possible to rise up in the league a little more.
+Short of implementing a genetic algorithm, with some tweaking of the parameters for corners, how much compensation is made to side to side momentum and how much the pod prepares for cornering, that it may be possible to rise up in the league a little more.
 
 Or, implementing a way for my second pod to act as a 'blocker' and actively seek to collide with the enemy that is in first position.
 
-Another way is to try and detect a collision before it happens, and try and avoid it. However, this would involve predicting the positions of the pods many ticks in advance.
+Another way is to try and detect a collision before it happens, and try and avoid it. However, this would involve trying to predict the positions of the pods many ticks in advance.
 
 
 
